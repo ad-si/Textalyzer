@@ -1,10 +1,13 @@
+require('string.prototype.repeat')
+
+
 function removePunctuation (text) {
 	return text.replace(/['";:,.\/?\\-]/g, '')
 }
 
 function getSortFunctionFor (property) {
 
-	return function(wordOne, wordTwo){
+	return function (wordOne, wordTwo) {
 		return wordTwo[property] - wordOne[property]
 	}
 }
@@ -37,6 +40,7 @@ function textalyzer (text) {
 		arr = [],
 		counts = {},
 		wordsSortedByFrequency,
+		maximumWordFrequency,
 		i
 
 
@@ -55,12 +59,36 @@ function textalyzer (text) {
 		})
 		.sort(getSortFunctionFor('absoluteFrequency'))
 
+
+	maximumWordFrequency = wordsSortedByFrequency[0].absoluteFrequency
+
 	return {
 		getStats: function () {
 			return {
 				wordFrequency: wordsSortedByFrequency
 			}
+		},
+		getFrequencyHistogram: function () {
+
+			var maxWidth = 100
+
+			return wordsSortedByFrequency
+				.map(function (wordObject, index) {
+
+					var width = Math.round(wordObject.absoluteFrequency /
+					                       maximumWordFrequency * maxWidth),
+						maxWordLength = 25 // TODO: get real value
+
+
+					return index + '\t' +
+					       wordObject.word +
+					       ' '.repeat(maxWordLength - wordObject.word.length) +
+					       '■'.repeat(width) +
+					       '\n'
+				})
+				.join('')
 		}
+
 	}
 }
 

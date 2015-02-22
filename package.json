@@ -26,5 +26,8 @@
   "homepage": "https://github.com/adius/textalyzer",
   "devDependencies": {
     "mocha": "^2.1.0"
+  },
+  "dependencies": {
+    "string.prototype.repeat": "^0.2.0"
   }
 }
