@@ -2,8 +2,11 @@ function removePunctuation (text) {
 	return text.replace(/['";:,.\/?\\-]/g, '')
 }
 
-function byFrequenzy (wordOne, wordTwo) {
-	return wordTwo.frequency - wordOne.frequency
+function getSortFunctionFor (property) {
+
+	return function(wordOne, wordTwo){
+		return wordTwo[property] - wordOne[property]
+	}
 }
 
 
@@ -46,10 +49,11 @@ function textalyzer (text) {
 		.map(function (word) {
 			return {
 				word: word,
-				frequency: wordFrequenzyMap[word]
+				absoluteFrequency: wordFrequenzyMap[word],
+				relativeFrequency: wordFrequenzyMap[word] / wordsCount
 			}
 		})
-		.sort(byFrequenzy)
+		.sort(getSortFunctionFor('absoluteFrequency'))
 
 	return {
 		getStats: function () {
