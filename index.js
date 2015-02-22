@@ -80,7 +80,7 @@ function textalyzer (text) {
 						maxWordLength = 25 // TODO: get real value
 
 
-					return index + '\t' +
+					return (index + 1) + '\t' +
 					       wordObject.word +
 					       ' '.repeat(maxWordLength - wordObject.word.length) +
 					       '■'.repeat(width) +
