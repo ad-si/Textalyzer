@@ -1,47 +1,63 @@
-var words = (function(){
+function removePunctuation (text) {
+	return text.replace(/['";:,.\/?\\-]/g, '')
+}
 
-	var sWords = document.body.innerText.toLowerCase().trim().replace(/[,;.]/g,'').split(/[\s\/]+/g).sort()
-	var iWordsCount = sWords.length // count w/ duplicates
+function byFrequenzy (wordOne, wordTwo) {
+	return wordTwo.frequency - wordOne.frequency
+}
 
-	// array of words to ignore
-	var ignore = ['and','the','to','a','of','for','as','i','with','it','is','on','that','this','can','in','be','has','if']
-	ignore = (function(){
-		var o = {} // object prop checking > in array checking
-		var iCount = ignore.length
-		for (var i=0;i<iCount;i++){
-			o[ignore[i]] = true
-		}
-		return o
-	}())
 
-	var counts = {} // object for math
-	for (var i=0; i<iWordsCount; i++) {
-		var sWord = sWords[i]
-		if (!ignore[sWord]) {
-			counts[sWord] = counts[sWord] || 0
-			counts[sWord]++
-		}
-	}
+function textalyzer (text) {
 
-	var arr = [] // an array of objects to return
-	for (sWord in counts) {
-		arr.push({
-			text: sWord,
-			frequency: counts[sWord]
-		})
-	}
+	var plainText = removePunctuation(text),
+		words = plainText
+			.toLowerCase()
+			.trim()
+			.split(/[\s\/]+/g),
+		wordsCount = words.length,
+		sortedWords = words.sort(),
+		wordFrequenzyMap = words.reduce(
+			function (previous, current, index, array) {
 
-	// sort array by descending frequency | http://stackoverflow.com/a/8837505
-	return arr.sort(function(a,b){
-		return (a.frequency > b.frequency) ? -1 : ((a.frequency < b.frequency) ? 1 : 0)
+				previous[current] = 0
+
+				return previous
+			},
+			{}
+		),
+		ignore = [
+			'and', 'the', 'to', 'a', 'of',
+			'for', 'as', 'i', 'with', 'it',
+			'is', 'on', 'that', 'this', 'can',
+			'in', 'be', 'has', 'if'
+		],
+		arr = [],
+		counts = {},
+		wordsSortedByFrequency,
+		i
+
+
+	words.forEach(function (word) {
+		wordFrequenzyMap[word]++
 	})
 
-}())
+	wordsSortedByFrequency = Object
+		.keys(wordFrequenzyMap)
+		.map(function (word) {
+			return {
+				word: word,
+				frequency: wordFrequenzyMap[word]
+			}
+		})
+		.sort(byFrequenzy)
 
-(function(){
-	var iWordsCount = words.length // count w/o duplicates
-	for (var i=0; i<iWordsCount; i++) {
-		var word = words[i]
-		console.log(word.frequency, word.text)
+	return {
+		getStats: function () {
+			return {
+				wordFrequency: wordsSortedByFrequency
+			}
+		}
 	}
-}())
+}
+
+module.exports = textalyzer
