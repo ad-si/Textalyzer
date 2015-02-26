@@ -15,6 +15,10 @@ function getSortFunctionFor (property) {
 
 function textalyzer (text) {
 
+	if (Buffer && Buffer.isBuffer(text))
+		text = text.toString()
+
+
 	var plainText = removePunctuation(text),
 		words = plainText
 			.toLowerCase()
@@ -88,7 +92,6 @@ function textalyzer (text) {
 				})
 				.join('')
 		}
-
 	}
 }
 
