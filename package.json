@@ -9,7 +9,8 @@
     "test": "test"
   },
   "scripts": {
-    "test": "mocha test"
+    "test": "mocha test",
+    "prepublish": "npm test && jscs ."
   },
   "repository": {
     "type": "git",
@@ -26,6 +27,7 @@
   },
   "homepage": "https://github.com/adius/textalyzer",
   "devDependencies": {
+    "jscs": "^1.13.1",
     "mocha": "^2.1.0"
   },
   "dependencies": {
