@@ -1,6 +1,6 @@
 {
   "name": "textalyzer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Analyze key metrics like number of words, readability, complexity, etc. of any kind of text",
   "main": "index.js",
   "bin": "cli/index.js",
