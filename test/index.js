@@ -7,6 +7,6 @@ var fs = require('fs'),
 	textalyzer = require('../index.js')
 
 
-// console.log(textalyzer(text).getStats())
+textalyzer(text).getStats()
 
-console.log(textalyzer(text).getFrequencyHistogram())
+textalyzer(text).getFrequencyHistogram()
