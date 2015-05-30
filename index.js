@@ -44,11 +44,15 @@ function textalyzer (text) {
 		counts = {},
 		wordsSortedByFrequency,
 		maximumWordFrequency,
+		maximumWordLength = 0,
 		i
 
 
 	words.forEach(function (word) {
 		wordFrequenzyMap[word]++
+
+		if (word.length > maximumWordLength)
+			maximumWordLength = word.length
 	})
 
 	wordsSortedByFrequency = Object.keys(wordFrequenzyMap)
