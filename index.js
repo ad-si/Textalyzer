@@ -11,6 +11,37 @@ function getSortFunctionFor (property) {
 	}
 }
 
+function getFrequencyHistogram (options) {
+
+	wordsSortedByFrequency = options.wordsSortedByFrequency
+	maximumWordFrequency = options.maximumWordFrequency
+	maximumWordLength = options.maximumWordLength
+	maxWidth = options.maxWidth
+
+
+	return wordsSortedByFrequency
+		.map(function (wordObject, index) {
+
+			var width = Math.round(
+				wordObject.absoluteFrequency /
+				maximumWordFrequency * maxWidth
+			)
+
+			return (index + 1) + '\t' +
+			wordObject.word +
+			' '.repeat(maximumWordLength - wordObject.word.length) +
+			'■'.repeat(width) +
+			'\n'
+		})
+		.join('')
+}
+
+function getStats (wordsSortedByFrequency) {
+	return {
+		wordFrequency: wordsSortedByFrequency
+	}
+}
+
 
 function textalyzer (text) {
 
@@ -70,29 +101,15 @@ function textalyzer (text) {
 
 	return {
 		getStats: function () {
-			return {
-				wordFrequency: wordsSortedByFrequency
-			}
+			return getStats(wordsSortedByFrequency)
 		},
 		getFrequencyHistogram: function () {
-
-			var maxWidth = 100
-
-			return wordsSortedByFrequency
-				.map(function (wordObject, index) {
-
-					var width = Math.round(wordObject.absoluteFrequency /
-					                       maximumWordFrequency * maxWidth),
-						maxWordLength = 25 // TODO: get real value
-
-
-					return (index + 1) + '\t' +
-					       wordObject.word +
-					       ' '.repeat(maxWordLength - wordObject.word.length) +
-					       '■'.repeat(width) +
-					       '\n'
-				})
-				.join('')
+			return getFrequencyHistogram({
+				wordsSortedByFrequency: wordsSortedByFrequency,
+				maximumWordFrequency: maximumWordFrequency,
+				maximumWordLength: maximumWordLength,
+				maxWidth: 100
+			})
 		}
 	}
 }
