@@ -6,7 +6,6 @@ function removePunctuation (text) {
 }
 
 function getSortFunctionFor (property) {
-
 	return function (wordOne, wordTwo) {
 		return wordTwo[property] - wordOne[property]
 	}
@@ -52,8 +51,7 @@ function textalyzer (text) {
 		wordFrequenzyMap[word]++
 	})
 
-	wordsSortedByFrequency = Object
-		.keys(wordFrequenzyMap)
+	wordsSortedByFrequency = Object.keys(wordFrequenzyMap)
 		.map(function (word) {
 			return {
 				word: word,
