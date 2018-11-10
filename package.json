@@ -3,14 +3,18 @@
   "version": "0.1.1",
   "description": "Analyze key metrics like number of words, readability, complexity, etc. of any kind of text",
   "main": "index.js",
-  "bin": "cli/index.js",
+  "bin": {
+    "textalyzer": "cli/index.js"
+  },
   "directories": {
     "example": "examples",
     "test": "test"
   },
   "scripts": {
-    "test": "mocha test",
-    "prepublish": "npm test && jscs ."
+    "lint": "jscs .",
+    "unit-tests": "mocha test",
+    "test": "npm run lint && npm run unit-tests",
+    "prepublish": "npm test"
   },
   "repository": {
     "type": "git",
@@ -27,8 +31,8 @@
   },
   "homepage": "https://github.com/adius/textalyzer",
   "devDependencies": {
-    "jscs": "^1.13.1",
-    "mocha": "^2.1.0"
+    "jscs": "^3.0.7",
+    "mocha": "^3.2.0"
   },
   "dependencies": {
     "string.prototype.repeat": "^0.2.0"
