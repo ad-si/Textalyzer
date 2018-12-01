@@ -1,0 +1,6 @@
+[package]
+name = "textalyzer"
+version = "0.1.0"
+authors = ["Adrian Sieber <mail@adriansieber.com>"]
+
+[dependencies]
