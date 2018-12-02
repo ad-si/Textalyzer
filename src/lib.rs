@@ -5,7 +5,6 @@ use pad::{Alignment, PadStr};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
-use std::io;
 use std::io::Write;
 use unicode_width::UnicodeWidthStr;
 
@@ -104,7 +103,10 @@ impl Config {
     }
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run<A: Write>(
+    config: Config,
+    mut output_stream: A,
+) -> Result<(), Box<dyn Error>> {
     match config.command {
         Command::Histogram => {
             let file_content = fs::read_to_string(config.filepath)?;
@@ -114,7 +116,7 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
 
             let formatted = format_freq_map(freq_vec);
             // Use instead writeln! of println! to avoid "broken pipe" errors
-            writeln!(io::stdout(), "{}", formatted);
+            writeln!(&mut output_stream, "{}", formatted);
             Ok(())
         }
     }

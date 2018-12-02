@@ -1,6 +1,7 @@
 extern crate textalyzer;
 
 use std::env;
+use std::io;
 use std::process;
 
 use textalyzer::*;
@@ -14,7 +15,7 @@ fn main() {
         process::exit(1);
     });
 
-    if let Err(error) = run(config) {
+    if let Err(error) = run(config, io::stdout()) {
         eprintln!("An error occurred during execution:\n{}", error);
         process::exit(1);
     }
