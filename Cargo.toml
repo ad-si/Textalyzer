@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["Adrian Sieber <mail@adriansieber.com>"]
 
 [dependencies]
+pad = "0.1.5"
+unicode-width = "0.1.5"

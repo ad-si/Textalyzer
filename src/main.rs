@@ -9,7 +9,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     let config = Config::new(&args).unwrap_or_else(|error| {
-        eprintln!("{}", error);
+        eprintln!("{}\n", error);
         eprintln!("{}", USAGE_STR);
         process::exit(1);
     });
