@@ -9,7 +9,7 @@ use textalyzer::*;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let config = Config::new(&args).unwrap_or_else(|error| {
+    let config = Config::from_args(&args).unwrap_or_else(|error| {
         eprintln!("{}\n", error);
         eprintln!("{}", USAGE_STR);
         process::exit(1);

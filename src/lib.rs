@@ -24,17 +24,17 @@ pub fn generate_frequency_map(text: &str) -> HashMap<String, i32> {
     frequency_map
 }
 
-pub fn format_freq_map(frequency_map: Vec<(&String, &i32)>) -> String {
+pub fn format_freq_map(frequency_map: &[(&String, &i32)]) -> String {
     let mut longest_word = "";
     let mut highest_number = 0;
 
-    for (word, count) in &frequency_map {
+    for (word, count) in frequency_map {
         let word_length = UnicodeWidthStr::width(&word[..]);
 
         if word_length > UnicodeWidthStr::width(longest_word) {
             longest_word = word;
         }
-        if count > &&highest_number {
+        if *count > &highest_number {
             highest_number = **count;
         }
     }
@@ -47,7 +47,7 @@ pub fn format_freq_map(frequency_map: Vec<(&String, &i32)>) -> String {
 
     let mut result = String::new();
 
-    for (word, count) in &frequency_map {
+    for (word, count) in frequency_map {
         let bar_width =
             (remaining_space as f32 / highest_number as f32) * **count as f32;
 
@@ -88,7 +88,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, String> {
+    pub fn from_args(args: &[String]) -> Result<Config, String> {
         if let [_name, cmd_str, filepath] = args {
             match Command::parse(cmd_str) {
                 Some(command) => Ok(Config {
@@ -114,9 +114,9 @@ pub fn run<A: Write>(
             let mut freq_vec: Vec<_> = freq_map.iter().collect();
             freq_vec.sort_by(|t1, t2| t2.1.cmp(t1.1));
 
-            let formatted = format_freq_map(freq_vec);
+            let formatted = format_freq_map(&freq_vec);
             // Use instead writeln! of println! to avoid "broken pipe" errors
-            writeln!(&mut output_stream, "{}", formatted);
+            writeln!(&mut output_stream, "{}", formatted)?;
             Ok(())
         }
     }
@@ -139,9 +139,9 @@ mod tests {
             (String::from("welcome"), 1),
             (String::from("world"), 2),
         ]
-            .iter()
-            .cloned()
-            .collect();
+        .iter()
+        .cloned()
+        .collect();
 
         assert_eq!(frequency_map, expected_map);
     }
