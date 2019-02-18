@@ -34,7 +34,7 @@ pub fn format_freq_map(frequency_map: &[(&String, &i32)]) -> String {
         if word_length > UnicodeWidthStr::width(longest_word) {
             longest_word = word;
         }
-        if *count > &highest_number {
+        if **count > highest_number {
             highest_number = **count;
         }
     }

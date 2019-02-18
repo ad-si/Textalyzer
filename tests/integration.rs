@@ -1,18 +1,13 @@
 extern crate textalyzer;
 
-use std::io;
-use textalyzer::*;
+use std::process::Command;
 
 #[test]
 fn it_can_be_called_with_args() {
-    let args = [
-        String::from("textalyzer"),
-        String::from("histogram"),
-        String::from("examples/1984.txt"),
-    ];
-    let config = Config::new(&args).unwrap_or_else(|error| panic!(error));
+    let output = Command::new("./target/debug/textalyzer")
+        .args(&["histogram", "./examples/1984.txt"])
+        .output()
+        .expect("failed to execute process");
 
-    if let Err(error) = run(config, io::sink()) {
-        panic!("{}", error);
-    }
+    assert_eq!(String::from_utf8_lossy(&output.stdout).len(), 239902);
 }

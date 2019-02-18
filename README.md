@@ -15,8 +15,8 @@ textalyzer histogram <filepath>
 
 ## Rewrite in Rust
 
-This CLI tool was originally written in JavaScript.
-It was rewritten in Rust to improve the performance.
+This CLI tool was originally written in JavaScript and was later
+rewritten in Rust to improve the performance.
 
 Before:
 
