@@ -8,7 +8,7 @@ dependencies = [
 
 [[package]]
 name = "textalyzer"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "pad 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "unicode-width 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",

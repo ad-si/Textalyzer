@@ -1,7 +1,17 @@
 [package]
 name = "textalyzer"
-version = "0.1.0"
+version = "0.2.0"
+description = """
+  Analyze key metrics like \
+  number of words, readability, and complexity \
+  of any kind of text
+  """
+repository = "https://github.com/ad-si/textalyzer"
 authors = ["Adrian Sieber <mail@adriansieber.com>"]
+keywords =["text", "analysis"]
+categories = ["command-line-utilities", "text-processing", "visualization"]
+license = "AGPL-3.0-or-later"
+
 
 [dependencies]
 pad = "0.1.5"
