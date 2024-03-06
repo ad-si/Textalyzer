@@ -10,10 +10,37 @@ use std::fs;
 use std::io::Write;
 use unicode_width::UnicodeWidthStr;
 
-use types::{Command, Config};
+use types::{Command, Config, FileEntry, LineEntry};
 
 const MAX_LINE_LENGTH: u16 = 80;
 
+/// Generate a frequency map from a given text.
+///
+/// # Examples
+///
+/// ```rust
+/// use textalyzer::generate_frequency_map;
+///
+/// let freq_map = generate_frequency_map(
+///    "This test is a test to test the frequency map."
+/// );
+///
+/// let expected_map: std::collections::HashMap<_, _> = vec![
+///   ("this", 1),
+///   ("test", 3),
+///   ("is", 1),
+///   ("a", 1),
+///   ("to", 1),
+///   ("the", 1),
+///   ("frequency", 1),
+///   ("map", 1),
+/// ]
+/// .into_iter()
+/// .map(|(s, n)| (String::from(s), n))
+/// .collect();
+///
+/// assert_eq!(freq_map, expected_map);
+/// ```
 pub fn generate_frequency_map(text: &str) -> HashMap<String, i32> {
     let words = text
         .split(|character| !char::is_alphabetic(character))
@@ -27,6 +54,7 @@ pub fn generate_frequency_map(text: &str) -> HashMap<String, i32> {
     frequency_map
 }
 
+/// Format a frequency map into a string.
 pub fn format_freq_map(frequency_map: &[(&String, &i32)]) -> String {
     let mut longest_word = "";
     let mut highest_number = 0;
@@ -71,6 +99,130 @@ pub fn format_freq_map(frequency_map: &[(&String, &i32)]) -> String {
     result
 }
 
+/// Merge lines from multiple files that pass the given filter
+/// into a single list.
+fn merge_file_lines(
+    filter: &dyn Fn(&&str) -> bool,
+    files: Vec<FileEntry>,
+) -> Vec<LineEntry> {
+    files
+        .iter()
+        .flat_map(|file| {
+            file.content
+                .lines()
+                .enumerate()
+                .filter(|(_num, line)| !line.trim().is_empty() && filter(line))
+                .map(move |(num, line)| LineEntry {
+                    file_name: file.name.clone(),
+                    line_number: (num as u32 + 1),
+                    content: line.to_string(),
+                })
+        })
+        .collect()
+}
+
+#[test]
+fn test_merge_file_lines() {
+    let file1 = FileEntry {
+        name: "file1.txt".to_string(),
+        content: "Line one\nLine Two\n".to_string(),
+    };
+    let file2 = FileEntry {
+        name: "file2.txt".to_string(),
+        content: "Another line\n".to_string(),
+    };
+    let lines = merge_file_lines(
+        &|line: &&str| line.trim().len() > 5,
+        vec![file1, file2],
+        //
+    );
+    let expected_lines = vec![
+        LineEntry {
+            file_name: "file1.txt".to_string(),
+            line_number: 1,
+            content: "Line one".to_string(),
+        },
+        LineEntry {
+            file_name: "file1.txt".to_string(),
+            line_number: 2,
+            content: "Line Two".to_string(),
+        },
+        LineEntry {
+            file_name: "file2.txt".to_string(),
+            line_number: 1,
+            content: "Another line".to_string(),
+        },
+    ];
+    assert_eq!(lines, expected_lines);
+}
+
+/// Find duplications in a given text.
+pub fn find_duplicate_lines(
+    files: Vec<FileEntry>,
+) -> Vec<(String, Vec<(String, u32)>)> {
+    let lines = merge_file_lines(
+        &|line: &&str| line.trim().len() > 5,
+        files, //
+    );
+    let mut line_map = HashMap::new();
+    let mut duplications = Vec::new();
+
+    for line_entry in lines.iter() {
+        let line_count = line_map //
+            .entry(&line_entry.content)
+            .or_insert_with(Vec::new);
+        line_count.push((line_entry.file_name.clone(), line_entry.line_number));
+    }
+
+    for (line, line_locations) in line_map {
+        if line_locations.len() > 1 {
+            duplications.push((line.clone(), line_locations));
+        }
+    }
+
+    duplications.sort_by(|a, b| {
+        b.0.trim().len().cmp(
+            &a.0.trim().len(), //
+        )
+    });
+
+    duplications
+}
+
+#[test]
+fn test_find_duplicate_lines() {
+    let file1 = FileEntry {
+        name: "file1.txt".to_string(),
+        content: "\
+            This is a test.\n\
+            This is only a test.\n\
+            This is a test.\n\
+            # Ignore empty lines\n\
+            \n\
+            \n\
+            # Ignore short lines\n\
+            abc\n\
+            abc\n"
+            .to_string(),
+    };
+    let file2 = FileEntry {
+        name: "file2.txt".to_string(),
+        content: "This is a test.\n".to_string(),
+    };
+    let duplications = find_duplicate_lines(vec![file1, file2]);
+    let expected_duplications = vec![(
+        "This is a test.".to_string(),
+        vec![
+            ("file1.txt".to_string(), 1),
+            ("file1.txt".to_string(), 3),
+            ("file2.txt".to_string(), 1),
+        ],
+    )];
+
+    assert_eq!(duplications, expected_duplications);
+}
+
+/// Run Textalyzer with the given configuration.
 pub fn run<A: Write>(
     config: Config,
     mut output_stream: A,
@@ -88,7 +240,24 @@ pub fn run<A: Write>(
             Ok(())
         }
         Command::Duplication { filepath } => {
-            println!("Check for duplications in file: {filepath}");
+            let file_entry = FileEntry {
+                name: filepath.clone(),
+                content: fs::read_to_string(filepath)?,
+            };
+            let duplications = find_duplicate_lines(vec![file_entry]);
+
+            writeln!(&mut output_stream, "Duplicate lines:\n")?;
+            for (line, line_locs) in duplications {
+                write!(&mut output_stream, "{:80} ▐ ", line)?;
+
+                let line_locs_formatted = line_locs
+                    .iter()
+                    .map(|loc| format!("{}:{}", loc.0, loc.1))
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                writeln!(&mut output_stream, "{}", line_locs_formatted)?;
+            }
+
             Ok(())
         }
     }

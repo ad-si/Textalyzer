@@ -13,3 +13,16 @@ pub enum Command {
 pub struct Config {
     pub command: Command,
 }
+
+#[derive(Debug)]
+pub struct FileEntry {
+    pub name: String,
+    pub content: String,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct LineEntry {
+    pub file_name: String,
+    pub line_number: u32,
+    pub content: String,
+}
