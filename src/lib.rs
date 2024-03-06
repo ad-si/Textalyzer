@@ -1,3 +1,5 @@
+pub mod types;
+
 extern crate pad;
 extern crate unicode_width;
 
@@ -8,8 +10,9 @@ use std::fs;
 use std::io::Write;
 use unicode_width::UnicodeWidthStr;
 
-pub static USAGE_STR: &str = "Usage: textalyzer histogram <filepath>";
-pub static MAX_LINE_LENGTH: i32 = 80;
+use types::{Command, Config};
+
+const MAX_LINE_LENGTH: u16 = 80;
 
 pub fn generate_frequency_map(text: &str) -> HashMap<String, i32> {
     let words = text
@@ -68,48 +71,13 @@ pub fn format_freq_map(frequency_map: &[(&String, &i32)]) -> String {
     result
 }
 
-pub enum Command {
-    Histogram,
-}
-
-impl Command {
-    pub fn parse(string: &str) -> Option<Command> {
-        if string == "histogram" {
-            Some(Command::Histogram)
-        } else {
-            None
-        }
-    }
-}
-
-pub struct Config {
-    command: Command,
-    filepath: String,
-}
-
-impl Config {
-    pub fn from_args(args: &[String]) -> Result<Config, String> {
-        if let [_name, cmd_str, filepath] = args {
-            match Command::parse(cmd_str) {
-                Some(command) => Ok(Config {
-                    command,
-                    filepath: filepath.to_string(),
-                }),
-                None => Err(format!("Command \"{}\" not available", cmd_str)),
-            }
-        } else {
-            Err(String::from("Error: Not enough arguments were provided!"))
-        }
-    }
-}
-
 pub fn run<A: Write>(
     config: Config,
     mut output_stream: A,
 ) -> Result<(), Box<dyn Error>> {
     match config.command {
-        Command::Histogram => {
-            let file_content = fs::read_to_string(config.filepath)?;
+        Command::Histogram { filepath } => {
+            let file_content = fs::read_to_string(filepath)?;
             let freq_map = generate_frequency_map(&file_content);
             let mut freq_vec: Vec<_> = freq_map.iter().collect();
             freq_vec.sort_by(|t1, t2| t2.1.cmp(t1.1));
@@ -117,6 +85,10 @@ pub fn run<A: Write>(
             let formatted = format_freq_map(&freq_vec);
             // Use instead writeln! of println! to avoid "broken pipe" errors
             writeln!(&mut output_stream, "{}", formatted)?;
+            Ok(())
+        }
+        Command::Duplication { filepath } => {
+            println!("Check for duplications in file: {filepath}");
             Ok(())
         }
     }

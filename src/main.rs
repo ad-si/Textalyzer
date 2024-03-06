@@ -1,22 +1,31 @@
+extern crate clap;
 extern crate textalyzer;
 
-use std::env;
 use std::io;
 use std::process;
 
-use textalyzer::*;
+use clap::Parser;
+
+use textalyzer::run;
+use textalyzer::types::{Command, Config};
+
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// Optional name to operate on
+    name: Option<String>,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    let config = Config::from_args(&args).unwrap_or_else(|error| {
-        eprintln!("{}\n", error);
-        eprintln!("{}", USAGE_STR);
-        process::exit(1);
-    });
-
-    if let Err(error) = run(config, io::stdout()) {
-        eprintln!("An error occurred during execution:\n{}", error);
-        process::exit(1);
+    if let Some(command) = cli.command {
+        if let Err(error) = run(Config { command }, io::stdout()) {
+            eprintln!("ERROR:\n{}", error);
+            process::exit(1);
+        }
     }
 }
