@@ -3,7 +3,12 @@
 Analyze key metrics like number of words, readability, complexity, etc.
 of any kind of text.
 
-![Screenshot](./images/2018-12-02_screenshot.png)
+CLI | Web
+--- | ---
+![CLI Screenshot][cli_ss] | ![Web Screenshot][web_ss]
+
+[cli_ss]: ./images/2024-03-08t1219_cli_screenshot.png
+[web_ss]: ./images/2024-03-08t1213_web_screenshot.png
 
 
 ## Usage

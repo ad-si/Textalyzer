@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en-US">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Textalyzer</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background-color: gainsboro;
+      margin: 0;
+    }
+
+    main {
+      min-height: 100vh;
+      max-width: 50rem;
+      margin: 0 auto;
+      background-color: white;
+      padding: 1rem 3rem;
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+    }
+
+    h2 {
+      margin-bottom: 1rem;
+    }
+
+    p {
+      margin-bottom: 2rem;
+    }
+
+    hr {
+      height: 1px;
+      background-color: lightgray;
+      margin: 1.5rem 0;
+    }
+
+    textarea {
+      border: 1px solid black;
+      border-radius: 5px;
+      padding: 0.6rem;
+      width: 100%;
+      font-family: monospace;
+      font-size: 14px;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Textalyzer</h1>
+    <p>Analyze key metrics of any kind of text</p>
+    <textarea>This is a test sentence to be analyzed.
+It contains a few words and some punctuation.
+Some test words are repeated to test the frequency map.
+</textarea>
+
+    <hr>
+
+    <h2>Word Frequency</h2>
+    <pre id="wordFreq"></pre>
+
+    <hr>
+
+    <h2>Line Duplication</h2>
+    <pre id="lineDup"></pre>
+  </main>
+
+  <script type="module">
+    import init, { get_freq_map, get_dup_lines } from "./pkg/textalyzer_wasm.js"
+    init().then(() => {
+      const textarea = document.querySelector("textarea")
+      const wordFreqElem = document.getElementById("wordFreq")
+      const lineDupElem = document.getElementById("lineDup")
+
+      function renderResults() {
+        textarea.style.height = ""
+        textarea.style.height = textarea.scrollHeight + "px"
+
+        const text = textarea.value
+
+        const freqMap = get_freq_map(text)
+        wordFreqElem.textContent = freqMap
+
+        const lineDupJSON = get_dup_lines(text)
+        const lineDupArr = JSON.parse(lineDupJSON)
+        const longestLineLength = lineDupArr.reduce(
+          (acc, line) => line[0].length > acc ? line[0].length : acc,
+          0
+        )
+        const lineDupFormatted = lineDupArr.map((line) => {
+          const lineRefs = line[1].map(ref => ref[1])
+          return line[0].padEnd(longestLineLength) +
+            `  ▐ Lines: ${lineRefs.join(", ")}`
+        })
+        lineDupElem.textContent = lineDupFormatted.join("\n")
+      }
+
+      textarea.addEventListener("input", () => {
+        renderResults()
+      })
+
+      renderResults()
+    })
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,19 @@
+[package]
+authors = ["Adrian Sieber <mail@adriansieber.com>"]
+categories = ["command-line-utilities", "text-processing", "visualization"]
+description = """
+  Analyze key metrics like \
+  number of words, readability, and complexity \
+  of any kind of text
+  """
+keywords = ["text", "analysis"]
+license = "AGPL-3.0-or-later"
+name = "textalyzer"
+readme = "README.md"
+repository = "https://github.com/ad-si/textalyzer"
+version = "0.2.1"
+
+[dependencies]
+clap = {version = "4.5.1", features = ["derive"]}
+pad = "0.1.5"
+unicode-width = "0.1.5"

@@ -1,20 +1,6 @@
-[package]
-name = "textalyzer"
-version = "0.2.1"
-description = """
-  Analyze key metrics like \
-  number of words, readability, and complexity \
-  of any kind of text
-  """
-repository = "https://github.com/ad-si/textalyzer"
-readme = "README.md"
-authors = ["Adrian Sieber <mail@adriansieber.com>"]
-keywords =["text", "analysis"]
-categories = ["command-line-utilities", "text-processing", "visualization"]
-license = "AGPL-3.0-or-later"
-
-
-[dependencies]
-clap = { version = "4.5.1", features = ["derive"] }
-pad = "0.1.5"
-unicode-width = "0.1.5"
+[workspace]
+members = [
+  "textalyzer",
+  "textalyzer-wasm",
+]
+resolver = "2"
