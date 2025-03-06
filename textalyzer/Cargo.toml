@@ -12,8 +12,9 @@ name = "textalyzer"
 readme = "README.md"
 repository = "https://github.com/ad-si/textalyzer"
 version = "0.2.1"
+edition = "2021"
 
 [dependencies]
-clap = {version = "4.5.1", features = ["derive"]}
+clap = { version = "4.5.1", features = ["derive"] }
 pad = "0.1.5"
 unicode-width = "0.1.5"

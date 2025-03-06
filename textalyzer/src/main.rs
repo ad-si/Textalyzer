@@ -12,20 +12,20 @@ use textalyzer::types::{Command, Config};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    /// Optional name to operate on
-    name: Option<String>,
+  /// Optional name to operate on
+  name: Option<String>,
 
-    #[command(subcommand)]
-    command: Option<Command>,
+  #[command(subcommand)]
+  command: Option<Command>,
 }
 
 fn main() {
-    let cli = Cli::parse();
+  let cli = Cli::parse();
 
-    if let Some(command) = cli.command {
-        if let Err(error) = run(Config { command }, io::stdout()) {
-            eprintln!("ERROR:\n{}", error);
-            process::exit(1);
-        }
+  if let Some(command) = cli.command {
+    if let Err(error) = run(Config { command }, io::stdout()) {
+      eprintln!("ERROR:\n{}", error);
+      process::exit(1);
     }
+  }
 }

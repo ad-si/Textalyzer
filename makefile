@@ -11,6 +11,11 @@ textalyzer-wasm/pkg: textalyzer-wasm/src/lib.rs textalyzer-wasm/Cargo.toml
 build: textalyzer-wasm/pkg
 
 
+.PHONY: fmt
+fmt:
+	cargo fmt
+
+
 .PHONY: test
 test:
 	cargo test
