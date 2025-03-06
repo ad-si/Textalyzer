@@ -15,3 +15,8 @@ build: textalyzer-wasm/pkg
 test:
 	cargo test
 	cargo clippy
+
+
+.PHONY: install
+install:
+	cargo install --path textalyzer
