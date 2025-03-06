@@ -18,6 +18,23 @@ textalyzer histogram <filepath>
 ```
 
 
+## Related
+
+- [jscpd] - Copy/paste detector for programming source code.
+- [megalinter] - Code quality and linter tool.
+- [pmd] - Source code analysis tool.
+- [qlty] - Code quality and security analysis tool.
+- [superdiff] - Find duplicate code blocks in files.
+- [wf] - Command line utility for counting word frequency.
+
+[jscpd]: https://github.com/kucherenko/jscpd
+[megalinter]: https://megalinter.io
+[pmd]: https://github.com/pmd/pmd
+[qlty]: https://github.com/qltysh/qlty
+[superdiff]: https://github.com/chuck-sys/superdiff
+[wf]: https://github.com/jarcane/wf
+
+
 ## Rewrite in Rust
 
 This CLI tool was originally written in JavaScript and was later
@@ -42,10 +59,3 @@ Benchmark #1: textalyzer histogram examples/1984.txt
 ```
 
 Pretty impressive 10x performance improvement! 😁
-
-
-## Related
-
-- [wf] - Command line utility for counting word frequency
-
-[wf]: https://github.com/jarcane/wf
