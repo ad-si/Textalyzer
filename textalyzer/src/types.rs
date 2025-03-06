@@ -6,8 +6,11 @@ use self::clap::Subcommand;
 pub enum Command {
   /// Prints a histogram of word frequency in a file
   Histogram { filepath: String },
-  /// Prints sections of a file that might be duplicated
-  Duplication { filepath: String },
+  /// Prints sections that might be duplicated in a file or directory (recursive)
+  Duplication {
+    /// Path to file or directory to scan for duplicates
+    path: String,
+  },
 }
 
 pub struct Config {

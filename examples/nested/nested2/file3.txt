@@ -1,0 +1,6 @@
+This is a deeply nested file.
+It also contains some duplicate content.
+This is a line that will appear in multiple files.
+This is a unique sentence.
+This is a duplicate line.
+End of nested file.

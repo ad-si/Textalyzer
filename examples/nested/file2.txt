@@ -1,0 +1,6 @@
+Another file with some content.
+This file also has some duplicated content.
+This is a line that will appear in multiple files.
+More random text here.
+This is a duplicate line.
+End of file 2.

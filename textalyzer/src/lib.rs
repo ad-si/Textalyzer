@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use unicode_width::UnicodeWidthStr;
 
 use types::{Command, Config, FileEntry, LineEntry};
@@ -225,6 +226,67 @@ fn test_find_duplicate_lines() {
 }
 
 /// Run Textalyzer with the given configuration.
+/// Recursively find all files in a directory
+fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
+  let mut files = Vec::new();
+
+  if dir.is_dir() {
+    for entry in fs::read_dir(dir)? {
+      let entry = entry?;
+      let path = entry.path();
+
+      if path.is_file() {
+        files.push(path);
+      } else if path.is_dir() {
+        let mut subdir_files = find_all_files(&path)?;
+        files.append(&mut subdir_files);
+      }
+    }
+  }
+
+  Ok(files)
+}
+
+/// Load multiple files as FileEntry structs
+fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>> {
+  let mut file_entries = Vec::new();
+
+  for path in paths {
+    // Skip binary files and files we can't read
+    if let Ok(content) = fs::read_to_string(&path) {
+      if !content.contains('\0') {
+        // Simple check for binary files
+        file_entries.push(FileEntry {
+          name: path.to_string_lossy().into_owned(),
+          content,
+        });
+      }
+    }
+  }
+
+  Ok(file_entries)
+}
+
+/// Output duplication information to the specified stream
+fn output_duplications<A: Write>(
+  duplications: Vec<(String, Vec<(String, u32)>)>,
+  mut output_stream: A,
+) -> Result<(), Box<dyn Error>> {
+  writeln!(&mut output_stream, "Duplicate lines:\n")?;
+  for (line, line_locs) in duplications {
+    write!(&mut output_stream, "{:80} ▐ ", line)?;
+
+    let line_locs_formatted = line_locs
+      .iter()
+      .map(|loc| format!("{}:{}", loc.0, loc.1))
+      .collect::<Vec<String>>()
+      .join(", ");
+    writeln!(&mut output_stream, "{}", line_locs_formatted)?;
+  }
+
+  Ok(())
+}
+
 pub fn run<A: Write>(
   config: Config,
   mut output_stream: A,
@@ -238,26 +300,35 @@ pub fn run<A: Write>(
       writeln!(&mut output_stream, "{}", formatted)?;
       Ok(())
     }
-    Command::Duplication { filepath } => {
-      let file_entry = FileEntry {
-        name: filepath.clone(),
-        content: fs::read_to_string(filepath)?,
-      };
-      let duplications = find_duplicate_lines(vec![file_entry]);
+    Command::Duplication { path } => {
+      let path = Path::new(&path);
 
-      writeln!(&mut output_stream, "Duplicate lines:\n")?;
-      for (line, line_locs) in duplications {
-        write!(&mut output_stream, "{:80} ▐ ", line)?;
+      if path.is_file() {
+        // Handle single file duplication
+        let file_entry = FileEntry {
+          name: path.to_string_lossy().into_owned(),
+          content: fs::read_to_string(path)?,
+        };
+        let duplications = find_duplicate_lines(vec![file_entry]);
+        output_duplications(duplications, output_stream)
+      } else if path.is_dir() {
+        // Handle directory traversal
+        let files = find_all_files(path)?;
 
-        let line_locs_formatted = line_locs
-          .iter()
-          .map(|loc| format!("{}:{}", loc.0, loc.1))
-          .collect::<Vec<String>>()
-          .join(", ");
-        writeln!(&mut output_stream, "{}", line_locs_formatted)?;
+        writeln!(
+          &mut output_stream,
+          "Scanning {} files in directory: {}",
+          files.len(),
+          path.display()
+        )?;
+
+        let file_entries = load_files(files)?;
+        let duplications = find_duplicate_lines(file_entries);
+
+        output_duplications(duplications, output_stream)
+      } else {
+        Err(format!("Path does not exist: {}", path.display()).into())
       }
-
-      Ok(())
     }
   }
 }
@@ -265,6 +336,9 @@ pub fn run<A: Write>(
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::fs::File;
+  use std::io::Write;
+  use tempfile::tempdir;
 
   #[test]
   fn generate_frequency_map_from_text() {
@@ -284,5 +358,59 @@ mod tests {
     .collect();
 
     assert_eq!(frequency_map, expected_map);
+  }
+
+  #[test]
+  fn test_find_all_files() -> Result<(), Box<dyn Error>> {
+    // Create a temporary directory structure
+    let temp_dir = tempdir()?;
+    let temp_path = temp_dir.path();
+
+    // Create some nested directories
+    let subdir = temp_path.join("subdir");
+    fs::create_dir(&subdir)?;
+
+    // Create some files
+    let file1 = temp_path.join("file1.txt");
+    let file2 = subdir.join("file2.txt");
+
+    File::create(&file1)?.write_all(b"Test content 1")?;
+    File::create(&file2)?.write_all(b"Test content 2")?;
+
+    // Test the function
+    let files = find_all_files(temp_path)?;
+
+    assert_eq!(files.len(), 2);
+
+    // Check that we found all the files (using contains instead of equality due to platform differences)
+    assert!(files.iter().any(|p| p.ends_with("file1.txt")));
+    assert!(files.iter().any(|p| p.ends_with("file2.txt")));
+
+    Ok(())
+  }
+
+  #[test]
+  fn test_load_files() -> Result<(), Box<dyn Error>> {
+    // Create a temporary directory
+    let temp_dir = tempdir()?;
+    let temp_path = temp_dir.path();
+
+    // Create some files
+    let file1 = temp_path.join("file1.txt");
+    let file2 = temp_path.join("file2.txt");
+
+    File::create(&file1)?.write_all(b"Test content 1")?;
+    File::create(&file2)?.write_all(b"Test content 2")?;
+
+    // Test the function
+    let file_entries = load_files(vec![file1.clone(), file2.clone()])?;
+
+    assert_eq!(file_entries.len(), 2);
+    assert_eq!(file_entries[0].name, file1.to_string_lossy());
+    assert_eq!(file_entries[0].content, "Test content 1");
+    assert_eq!(file_entries[1].name, file2.to_string_lossy());
+    assert_eq!(file_entries[1].content, "Test content 2");
+
+    Ok(())
   }
 }

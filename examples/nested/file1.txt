@@ -1,0 +1,6 @@
+This is a sample text file.
+It contains a few lines that will be duplicated.
+This is a line that will appear in multiple files.
+Some more unique content here.
+This is a duplicate line.
+End of file 1.
