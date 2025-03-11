@@ -1,11 +1,13 @@
 pub mod types;
 
 extern crate colored;
+extern crate ignore;
 extern crate pad;
 extern crate terminal_size;
 extern crate unicode_width;
 
 use colored::Colorize;
+use ignore::WalkBuilder;
 use pad::{Alignment, PadStr};
 use std::collections::HashMap;
 use std::error::Error;
@@ -230,20 +232,41 @@ fn test_find_duplicate_lines() {
 }
 
 /// Run Textalyzer with the given configuration.
-/// Recursively find all files in a directory
+/// Recursively find all files in a directory using the ignore crate
+/// This respects .gitignore, .ignore, and other standard ignore files
 fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
   let mut files = Vec::new();
 
-  if dir.is_dir() {
-    for entry in fs::read_dir(dir)? {
-      let entry = entry?;
-      let path = entry.path();
+  // Use WalkBuilder from the ignore crate to handle gitignore patterns properly
+  let mut builder = WalkBuilder::new(dir);
 
-      if path.is_file() {
-        files.push(path);
-      } else if path.is_dir() {
-        let mut subdir_files = find_all_files(&path)?;
-        files.append(&mut subdir_files);
+  // Configure the walker to respect standard ignore files
+  builder
+    .hidden(false) // Don't skip hidden files (let .gitignore decide)
+    .git_global(true) // Use global gitignore
+    .git_ignore(true) // Use git ignore
+    .ignore(true) // Use .ignore files
+    .git_exclude(true) // Use git exclude
+    .filter_entry(|e| {
+      // Add explicit filter for .git directories
+      let path = e.path();
+      // Skip .git directories
+      !(path.file_name() == Some(".git".as_ref())
+        || path.to_string_lossy().contains("/.git/"))
+    });
+
+  // Walk the directory and collect all files
+  for result in builder.build() {
+    match result {
+      Ok(entry) => {
+        let path = entry.path().to_path_buf();
+        if path.is_file() {
+          files.push(path);
+        }
+      }
+      Err(err) => {
+        // Log error but continue with other files
+        eprintln!("Error accessing path: {}", err);
       }
     }
   }

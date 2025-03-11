@@ -25,3 +25,9 @@ test:
 .PHONY: install
 install:
 	cargo install --path textalyzer
+
+
+.PHONY: clean
+clean:
+	rm -rf target
+	rm -rf textalyzer-wasm/pkg
