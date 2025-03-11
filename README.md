@@ -18,12 +18,12 @@ CLI | Web
 textalyzer histogram <filepath>
 
 # Find duplicated code blocks
-textalyzer duplication <filepath or directory>
+textalyzer duplication <filepath or directory> [<additional paths...>]
 ```
 
 The duplication command analyzes files for duplicated text blocks. It can:
-- Analyze a single file or recursively scan directories
-- Identify multi-line duplications across files
+- Analyze multiple files or recursively scan directories
+- Identify multi-line duplications across all specified files
 - Rank duplications by number of consecutive lines
 - Show all occurrences with file and line references
 

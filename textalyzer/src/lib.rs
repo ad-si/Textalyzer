@@ -722,39 +722,62 @@ pub fn run<A: Write>(
       writeln!(&mut output_stream, "{}", formatted)?;
       Ok(())
     }
-    Command::Duplication { path } => {
-      let path = Path::new(&path);
+    Command::Duplication { paths } => {
+      // Collect all file entries from all specified paths
+      let mut all_files: Vec<PathBuf> = Vec::new();
+      let mut scanned_dirs = 0;
+      let mut scanned_files = 0;
 
-      if path.is_file() {
-        // Handle single file duplication
-        let file_entry = FileEntry {
-          name: path.to_string_lossy().into_owned(),
-          content: fs::read_to_string(path)?,
-        };
-        let duplications = find_multi_line_duplications(vec![file_entry]);
-        output_duplications(duplications, output_stream)
-      } else if path.is_dir() {
-        // Handle directory traversal
-        let files = find_all_files(path)?;
+      // Process each path argument
+      for path_str in paths {
+        let path = Path::new(&path_str);
 
+        if path.is_file() {
+          // Single file
+          all_files.push(path.to_path_buf());
+          scanned_files += 1;
+        } else if path.is_dir() {
+          // Directory traversal
+          let files = find_all_files(path)?;
+          writeln!(
+            &mut output_stream,
+            "{}",
+            format!(
+              "🔎 Scanning {} files in directory: {}",
+              files.len(),
+              path.display()
+            )
+            .bold()
+          )?;
+          
+          all_files.extend(files);
+          scanned_dirs += 1;
+        } else {
+          return Err(format!("Path does not exist: {}", path.display()).into());
+        }
+      }
+
+      if scanned_dirs == 0 && scanned_files > 0 {
         writeln!(
           &mut output_stream,
           "{}",
           format!(
-            "🔎 Scanning {} files in directory: {}",
-            files.len(),
-            path.display()
+            "🔎 Scanning {} file(s)",
+            all_files.len()
           )
           .bold()
         )?;
-
-        let file_entries = load_files(files)?;
-        let duplications = find_multi_line_duplications(file_entries);
-
-        output_duplications(duplications, output_stream)
-      } else {
-        Err(format!("Path does not exist: {}", path.display()).into())
       }
+
+      if all_files.is_empty() {
+        return Err("No valid files found in the specified paths".into());
+      }
+
+      // Load all collected files
+      let file_entries = load_files(all_files)?;
+      let duplications = find_multi_line_duplications(file_entries);
+
+      output_duplications(duplications, output_stream)
     }
   }
 }

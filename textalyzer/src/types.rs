@@ -6,10 +6,10 @@ use self::clap::Subcommand;
 pub enum Command {
   /// Prints a histogram of word frequency in a file
   Histogram { filepath: String },
-  /// Prints sections that might be duplicated in a file or directory (recursive)
+  /// Prints sections that might be duplicated in files or directories (recursive)
   Duplication {
-    /// Path to file or directory to scan for duplicates
-    path: String,
+    /// Paths to files or directories to scan for duplicates
+    paths: Vec<String>,
   },
 }
 
