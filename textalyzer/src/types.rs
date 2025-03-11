@@ -11,6 +11,9 @@ pub enum Command {
   Duplication {
     /// Paths to files or directories to scan for duplicates
     paths: Vec<String>,
+    /// Minimum number of non-empty lines required to consider a block as a duplication
+    #[clap(long, default_value = "3")]
+    min_lines: usize,
   },
 }
 
@@ -39,7 +42,7 @@ impl MappedContent {
       MappedContent::String(s) => Some(s),
     }
   }
-  
+
   // Get content as a string
   pub fn to_string(&self) -> Option<String> {
     self.as_str().map(String::from)

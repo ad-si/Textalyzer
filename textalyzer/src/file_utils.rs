@@ -35,7 +35,7 @@ pub fn merge_file_lines(
             // Skip invalid UTF-8 content
             Vec::new()
           }
-        },
+        }
         MappedContent::String(content) => {
           // Process string content
           content
@@ -98,7 +98,9 @@ pub fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
 }
 
 /// Load multiple files as FileEntry structs using memory mapping for improved performance
-pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>> {
+pub fn load_files(
+  paths: Vec<PathBuf>,
+) -> Result<Vec<FileEntry>, Box<dyn Error>> {
   // Use rayon's parallel iterator to process files in parallel
   let file_entries: Vec<Option<FileEntry>> = paths
     .par_iter()
@@ -108,9 +110,13 @@ pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>>
         // Open the file
         let file = match File::open(path) {
           Ok(f) => f,
-          Err(e) => return Err(format!("Failed to open {}: {}", path.display(), e).into()),
+          Err(e) => {
+            return Err(
+              format!("Failed to open {}: {}", path.display(), e).into(),
+            )
+          }
         };
-        
+
         // Check if the file is empty
         let metadata = file.metadata()?;
         if metadata.len() == 0 {
@@ -120,7 +126,7 @@ pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>>
             content: MappedContent::String(String::new()),
           });
         }
-        
+
         // Try to memory map the file
         match unsafe { MmapOptions::new().map(&file) } {
           Ok(mmap) => {
@@ -128,7 +134,7 @@ pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>>
             if mmap.iter().any(|&b| b == 0) {
               return Err("Binary file detected".into());
             }
-            
+
             // Basic UTF-8 validation
             match std::str::from_utf8(&mmap) {
               Ok(_) => Ok(FileEntry {
@@ -137,18 +143,21 @@ pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>>
               }),
               Err(_) => Err("Invalid UTF-8 file".into()),
             }
-          },
-          Err(e) => Err(format!("Failed to mmap {}: {}", path.display(), e).into()),
+          }
+          Err(e) => {
+            Err(format!("Failed to mmap {}: {}", path.display(), e).into())
+          }
         }
       })();
-      
+
       // If memory mapping fails, fall back to regular string loading for very small files
       match result {
         Ok(entry) => Some(entry),
         Err(_) => {
           // Fall back to reading the file as a string for small files
           match fs::metadata(path) {
-            Ok(metadata) if metadata.len() < 1024 * 10 => { // Only fall back for files < 10KB
+            Ok(metadata) if metadata.len() < 1024 * 10 => {
+              // Only fall back for files < 10KB
               match fs::read_to_string(path) {
                 Ok(content) if !content.contains('\0') => Some(FileEntry {
                   name: path.to_string_lossy().into_owned(),
@@ -156,7 +165,7 @@ pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>>
                 }),
                 _ => None,
               }
-            },
+            }
             _ => None,
           }
         }
@@ -166,7 +175,7 @@ pub fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>>
 
   // Filter out None values (failed reads or binary files)
   let valid_entries = file_entries.into_iter().flatten().collect();
-  
+
   Ok(valid_entries)
 }
 
@@ -269,7 +278,7 @@ mod tests {
     match &file_entries[0].content {
       MappedContent::Mapped(mmap) => {
         assert_eq!(std::str::from_utf8(mmap).unwrap(), "Test content 1");
-      },
+      }
       MappedContent::String(s) => {
         assert_eq!(s, "Test content 1");
       }

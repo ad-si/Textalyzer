@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use pad::{Alignment, PadStr};
+use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
 const MAX_LINE_LENGTH: u16 = 80;

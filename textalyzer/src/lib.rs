@@ -1,8 +1,8 @@
-pub mod types;
-pub mod frequency;
 pub mod duplication;
 pub mod file_utils;
+pub mod frequency;
 pub mod output;
+pub mod types;
 
 extern crate colored;
 extern crate ignore;
@@ -18,7 +18,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-use duplication::find_multi_line_duplications;
+use duplication::{find_duplicate_lines, find_multi_line_duplications};
 use file_utils::{find_all_files, load_files};
 use frequency::{format_freq_map, generate_frequency_map};
 use output::output_duplications;
@@ -37,7 +37,7 @@ pub fn run<A: Write>(
       writeln!(&mut output_stream, "{}", formatted)?;
       Ok(())
     }
-    Command::Duplication { paths } => {
+    Command::Duplication { paths, min_lines } => {
       // Collect all file entries from all specified paths
       let mut all_files = Vec::new();
       let mut scanned_dirs = 0;
@@ -64,11 +64,13 @@ pub fn run<A: Write>(
             )
             .bold()
           )?;
-          
+
           all_files.extend(files);
           scanned_dirs += 1;
         } else {
-          return Err(format!("Path does not exist: {}", path.display()).into());
+          return Err(
+            format!("Path does not exist: {}", path.display()).into(),
+          );
         }
       }
 
@@ -76,11 +78,7 @@ pub fn run<A: Write>(
         writeln!(
           &mut output_stream,
           "{}",
-          format!(
-            "🔎 Scanning {} file(s)",
-            all_files.len()
-          )
-          .bold()
+          format!("🔎 Scanning {} file(s)", all_files.len()).bold()
         )?;
       }
 
@@ -90,7 +88,26 @@ pub fn run<A: Write>(
 
       // Load all collected files
       let file_entries = load_files(all_files)?;
-      let duplications = find_multi_line_duplications(file_entries);
+
+      // Choose the appropriate function based on the min_lines value
+      let duplications = if min_lines <= 1 {
+        // For min_lines of 1, use the single-line detection function
+        find_duplicate_lines(file_entries)
+      } else {
+        // For min_lines > 1, use the multi-line detection with filtering
+        let mut results = find_multi_line_duplications(file_entries);
+
+        // Filter results to only include those with at least min_lines non-empty lines
+        results.retain(|(content, _)| {
+          let non_empty_lines = content
+            .split('\n')
+            .filter(|line| !line.trim().is_empty())
+            .count();
+          non_empty_lines >= min_lines
+        });
+
+        results
+      };
 
       output_duplications(duplications, output_stream)
     }
