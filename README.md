@@ -26,6 +26,7 @@ The duplication command analyzes files for duplicated text blocks. It can:
 - Identify multi-line duplications across all specified files
 - Rank duplications by number of consecutive lines
 - Show all occurrences with file and line references
+- Utilize multithreaded processing for optimal performance on all available CPU cores
 
 
 ## Related

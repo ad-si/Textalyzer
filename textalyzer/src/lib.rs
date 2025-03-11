@@ -3,17 +3,20 @@ pub mod types;
 extern crate colored;
 extern crate ignore;
 extern crate pad;
+extern crate rayon;
 extern crate terminal_size;
 extern crate unicode_width;
 
 use colored::Colorize;
 use ignore::WalkBuilder;
 use pad::{Alignment, PadStr};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use terminal_size::{terminal_size, Width};
 use unicode_width::UnicodeWidthStr;
 
@@ -198,7 +201,7 @@ pub fn find_duplicate_lines(
   duplications
 }
 
-/// Find multi-line duplications across files.
+/// Find multi-line duplications across files, utilizing parallel processing.
 ///
 /// This function detects sequences of consecutive lines that are duplicated
 /// across files or within the same file, prioritizing longer sequences.
@@ -208,8 +211,13 @@ pub fn find_duplicate_lines(
 pub fn find_multi_line_duplications(
   files: Vec<FileEntry>,
 ) -> Vec<(String, Vec<(String, u32)>)> {
-  // Pre-compute file lines for each file only once and reuse
+  // Type definitions to reduce complexity
   type FileLines<'a> = Vec<&'a str>;
+  type Location = (String, u32);
+  type LineIndex<'a> = HashMap<&'a str, Vec<Location>>;
+  type BlocksMap = HashMap<String, Vec<Location>>;
+  type SharedLineIndex<'a> = Arc<Mutex<LineIndex<'a>>>;
+  type SharedBlocksMap = Arc<Mutex<BlocksMap>>;
   
   // Store the parsed lines for each file to avoid repeated parsing
   let file_lines_map: HashMap<String, FileLines> = files
@@ -218,43 +226,58 @@ pub fn find_multi_line_duplications(
     .collect();
   
   // Create initial line index - map from line content to locations
-  // Using a hash-based approach for faster lookups
-  let mut line_index: HashMap<&str, Vec<(String, u32)>> = HashMap::new();
+  // Using a shared hash map for concurrent access
+  let line_index: SharedLineIndex = Arc::new(Mutex::new(HashMap::new()));
   
-  // Build the initial index of duplicate lines
-  for file_entry in &files {
+  // Build the initial index of duplicate lines in parallel
+  files.par_iter().for_each(|file_entry| {
     let file_lines = file_lines_map.get(&file_entry.name).unwrap();
+    let mut local_entries = Vec::new();
     
-    // Only add non-empty lines to the index
+    // Process each line in the file and store entries in a local collection
     for (i, line) in file_lines.iter().enumerate() {
       if !line.trim().is_empty() {
-        line_index
-          .entry(line)
-          .or_default()
-          .push((file_entry.name.clone(), (i + 1) as u32));
+        local_entries.push((
+          *line, 
+          (file_entry.name.clone(), (i + 1) as u32)
+        ));
       }
     }
-  }
+    
+    // Update the shared line index less frequently
+    let mut index = line_index.lock().unwrap();
+    for (line, location) in local_entries {
+      index.entry(line).or_default().push(location);
+    }
+  });
+  
+  // Get the inner value from Arc<Mutex<T>>
+  let raw_line_index = Arc::try_unwrap(line_index)
+    .expect("References to line_index still exist")
+    .into_inner()
+    .expect("Failed to unwrap Mutex");
   
   // Only keep lines that appear in multiple locations (duplicates)
-  let duplicate_lines: HashMap<&str, Vec<(String, u32)>> = line_index
+  let duplicate_lines: HashMap<&str, Vec<(String, u32)>> = raw_line_index
     .into_iter()
     .filter(|(_, locations)| locations.len() > 1)
     .collect();
-  
-  // Store unique duplication blocks with their locations
-  // Using a HashMap for faster exact matches lookups
-  let mut blocks_map: HashMap<String, Vec<(String, u32)>> = HashMap::new();
   
   // For efficiency, only consider lines that appear as duplicates
   let duplicate_line_set: std::collections::HashSet<&str> = 
     duplicate_lines.keys().copied().collect();
   
-  // For each file
-  for file_entry in &files {
+  // Create a thread-safe container for blocks
+  let blocks_map: SharedBlocksMap = Arc::new(Mutex::new(HashMap::new()));
+  
+  // Process each file in parallel
+  files.par_iter().for_each(|file_entry| {
     let file_name = &file_entry.name;
     let file_lines = file_lines_map.get(file_name).unwrap();
     let file_len = file_lines.len();
+    
+    // Local collection to minimize locks
+    let mut local_blocks: HashMap<String, Vec<(String, u32)>> = HashMap::new();
     
     // For each potential starting position
     for start_idx in 0..file_len {
@@ -299,8 +322,8 @@ pub fn find_multi_line_duplications(
             // Efficiently build the block string
             let block = file_lines[start_idx..(start_idx + match_len)].join("\n");
             
-            // Use our hash map for faster lookups
-            let locations = blocks_map.entry(block).or_default();
+            // Use our local hash map for faster lookups
+            let locations = local_blocks.entry(block).or_default();
             
             // Add the current file location if not already present
             let current_loc = (file_name.clone(), start_idx as u32 + 1);
@@ -317,10 +340,29 @@ pub fn find_multi_line_duplications(
         }
       }
     }
-  }
+    
+    // Merge local blocks into the shared map
+    if !local_blocks.is_empty() {
+      let mut shared_blocks = blocks_map.lock().unwrap();
+      for (block, locations) in local_blocks {
+        let shared_locations = shared_blocks.entry(block).or_default();
+        for loc in locations {
+          if !shared_locations.contains(&loc) {
+            shared_locations.push(loc);
+          }
+        }
+      }
+    }
+  });
+  
+  // Get the inner value from Arc<Mutex<T>>
+  let raw_blocks_map = Arc::try_unwrap(blocks_map)
+    .expect("References to blocks_map still exist")
+    .into_inner()
+    .expect("Failed to unwrap Mutex");
   
   // Convert to Vec and filter by our criteria
-  let mut all_blocks: Vec<(String, Vec<(String, u32)>)> = blocks_map
+  let mut all_blocks: Vec<(String, Vec<(String, u32)>)> = raw_blocks_map
     .into_iter()
     .filter(|(content, _)| {
       // Keep multi-line blocks 
@@ -346,9 +388,10 @@ pub fn find_multi_line_duplications(
     }
   });
   
-  // Process overlapping duplications efficiently
+  // Process overlapping duplications 
+  // This part is not parallelized because it processes items sequentially
+  // based on their sorted order
   let mut result = Vec::new();
-  // Using a more compact encoding of used positions
   let mut used_positions: HashMap<(String, u32), usize> = HashMap::new();
   
   for (content, locations) in all_blocks {
@@ -568,24 +611,30 @@ fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
   Ok(files)
 }
 
-/// Load multiple files as FileEntry structs
+/// Load multiple files as FileEntry structs using parallel processing
 fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>> {
-  let mut file_entries = Vec::new();
-
-  for path in paths {
-    // Skip binary files and files we can't read
-    if let Ok(content) = fs::read_to_string(&path) {
-      if !content.contains('\0') {
-        // Simple check for binary files
-        file_entries.push(FileEntry {
-          name: path.to_string_lossy().into_owned(),
-          content,
-        });
+  // Use rayon's parallel iterator to process files in parallel
+  let file_entries: Vec<Option<FileEntry>> = paths
+    .par_iter()
+    .map(|path| {
+      // Skip binary files and files we can't read
+      match fs::read_to_string(path) {
+        Ok(content) if !content.contains('\0') => {
+          // Simple check for binary files
+          Some(FileEntry {
+            name: path.to_string_lossy().into_owned(),
+            content,
+          })
+        }
+        _ => None,
       }
-    }
-  }
+    })
+    .collect();
 
-  Ok(file_entries)
+  // Filter out None values (failed reads or binary files)
+  let valid_entries = file_entries.into_iter().flatten().collect();
+  
+  Ok(valid_entries)
 }
 
 /// Attempt to detect if terminal is using a light theme
@@ -787,6 +836,7 @@ mod tests {
   use super::*;
   use std::fs::File;
   use std::io::Write;
+  use std::time::Instant;
   use tempfile::tempdir;
 
   #[test]
@@ -860,6 +910,58 @@ mod tests {
     assert_eq!(file_entries[1].name, file2.to_string_lossy());
     assert_eq!(file_entries[1].content, "Test content 2");
 
+    Ok(())
+  }
+  
+  #[test]
+  #[ignore] // This is a benchmark test, run it explicitly
+  fn benchmark_multi_line_duplications() -> Result<(), Box<dyn Error>> {
+    // Create temporary files with duplications
+    let temp_dir = tempdir()?;
+    let temp_path = temp_dir.path();
+    
+    const NUM_FILES: usize = 20;
+    const LINES_PER_FILE: usize = 2000;
+    const DUPLICATED_BLOCKS: usize = 30;
+    const BLOCK_SIZE: usize = 5;
+    
+    let mut files = Vec::new();
+    
+    // Generate test files with duplicated blocks
+    for i in 0..NUM_FILES {
+      let file_path = temp_path.join(format!("file{}.txt", i));
+      let mut content = String::new();
+      
+      for j in 0..LINES_PER_FILE {
+        // Insert duplicated blocks at regular intervals
+        if j % 50 == 0 && j < DUPLICATED_BLOCKS * 50 {
+          let block_id = j / 50;
+          for k in 0..BLOCK_SIZE {
+            content.push_str(&format!("This is duplicated block {} line {}\n", block_id, k));
+          }
+        } else {
+          content.push_str(&format!("Unique line {} in file {}\n", j, i));
+        }
+      }
+      
+      File::create(&file_path)?.write_all(content.as_bytes())?;
+      files.push(file_path);
+    }
+    
+    // Load files
+    let file_entries = load_files(files)?;
+    
+    // Measure performance
+    let start = Instant::now();
+    let duplications = find_multi_line_duplications(file_entries);
+    let duration = start.elapsed();
+    
+    println!("Time elapsed: {:?}", duration);
+    println!("Found {} duplications", duplications.len());
+    
+    // Verify that we found all duplicated blocks
+    assert_eq!(duplications.len(), DUPLICATED_BLOCKS);
+    
     Ok(())
   }
 }
