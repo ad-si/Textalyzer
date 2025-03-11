@@ -4,7 +4,13 @@ help: makefile
 
 
 textalyzer-wasm/pkg: textalyzer-wasm/src/lib.rs textalyzer-wasm/Cargo.toml
-	cd textalyzer-wasm && wasm-pack build --target web
+	if command -v wasm-pack >/dev/null 2>&1; \
+	then \
+		cd textalyzer-wasm \
+		&& wasm-pack build --target web; \
+	else \
+		echo cargo binstall wasm-pack; \
+	fi
 
 
 .PHONY: build
