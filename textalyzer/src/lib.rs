@@ -37,7 +37,11 @@ pub fn run<A: Write>(
       writeln!(&mut output_stream, "{}", formatted)?;
       Ok(())
     }
-    Command::Duplication { paths, min_lines } => {
+    Command::Duplication {
+      paths,
+      min_lines,
+      files_only,
+    } => {
       // Collect all file entries from all specified paths
       let mut all_files = Vec::new();
       let mut scanned_dirs = 0;
@@ -109,7 +113,7 @@ pub fn run<A: Write>(
         results
       };
 
-      output_duplications(duplications, output_stream)
+      output_duplications(duplications, output_stream, files_only)
     }
   }
 }

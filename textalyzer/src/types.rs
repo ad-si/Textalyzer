@@ -14,6 +14,9 @@ pub enum Command {
     /// Minimum number of non-empty lines required to consider a block as a duplication
     #[clap(long, default_value = "3")]
     min_lines: usize,
+    /// Only show the file paths with duplications, not the duplicated content
+    #[clap(long)]
+    files_only: bool,
   },
 }
 

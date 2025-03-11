@@ -31,9 +31,13 @@ pub fn is_light_theme() -> bool {
 }
 
 /// Output duplication information to the specified stream
+///
+/// If files_only is true, only the file paths with duplications will be shown,
+/// not the duplicated content itself.
 pub fn output_duplications<A: Write>(
   duplications: Vec<(String, Vec<(String, u32)>)>,
   mut output_stream: A,
+  files_only: bool,
 ) -> Result<(), Box<dyn Error>> {
   let is_light = is_light_theme();
 
@@ -46,12 +50,12 @@ pub fn output_duplications<A: Write>(
   let count_msg = format!("📚 Found {} duplicate entries", duplications.len());
   writeln!(&mut output_stream, "{}\n", count_msg.bold())?;
 
-  for (line, line_locs) in duplications {
-    // Get terminal width or default to 80 if it can't be determined
-    let term_width = terminal_size()
-      .map(|(Width(w), _)| w as usize)
-      .unwrap_or(80);
+  // Get terminal width or default to 80 if it can't be determined
+  let term_width = terminal_size()
+    .map(|(Width(w), _)| w as usize)
+    .unwrap_or(80);
 
+  for (line, line_locs) in duplications {
     // Configure remaining width for file paths
     let left_width = 80;
     let avail_width = if term_width > left_width {
@@ -103,21 +107,23 @@ pub fn output_duplications<A: Write>(
     // Write the file paths
     writeln!(&mut output_stream, "{}\n", current_line)?;
 
-    // Format the duplicate line with borders but no background color
-    let formatted_line = if is_light {
-      // In light themes, make the line darker for better readability
-      line.bold()
-    } else {
-      // In dark themes, use normal color for better readability
-      line.normal()
-    };
+    if !files_only {
+      // Format the duplicate line with borders but no background color
+      let formatted_line = if is_light {
+        // In light themes, make the line darker for better readability
+        line.bold()
+      } else {
+        // In dark themes, use normal color for better readability
+        line.normal()
+      };
 
-    write!(&mut output_stream, "{:76}", formatted_line)?;
-    writeln!(&mut output_stream)?;
+      write!(&mut output_stream, "{:76}", formatted_line)?;
+      writeln!(&mut output_stream)?;
 
-    // Add separator line of dashes after each duplication
-    let separator = "-".repeat(term_width);
-    writeln!(&mut output_stream, "{}", separator)?;
+      // Add separator line of dashes after each duplication
+      let separator = "-".repeat(term_width);
+      writeln!(&mut output_stream, "{}", separator)?;
+    }
   }
 
   Ok(())
