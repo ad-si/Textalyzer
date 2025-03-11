@@ -202,6 +202,8 @@ pub fn find_duplicate_lines(
 ///
 /// This function detects sequences of consecutive lines that are duplicated
 /// across files or within the same file, prioritizing longer sequences.
+/// For single-line duplications, it only includes lines with more than 3 non-whitespace characters.
+/// Multi-line duplications are always included.
 pub fn find_multi_line_duplications(
   files: Vec<FileEntry>,
 ) -> Vec<(String, Vec<(String, u32)>)> {
@@ -280,8 +282,8 @@ pub fn find_multi_line_duplications(
           }
         }
 
-        // Only consider matches of at least 2 lines
-        if consecutive_match_count >= 2 {
+        // Only consider matches of at least 1 line
+        if consecutive_match_count >= 1 {
           // Combine the matching lines into a single text block
           let block = file_lines
             [start_idx..(start_idx + consecutive_match_count)]
@@ -320,8 +322,28 @@ pub fn find_multi_line_duplications(
     }
   }
 
+  // Filter duplications based on our criteria:
+  // 1. Keep all multi-line blocks (2+ lines)
+  // 2. For single lines, only keep those with more than 2 non-whitespace chars
+  let filtered_dups: Vec<(String, Vec<(String, u32)>)> = multi_line_dups
+    .into_iter()
+    .filter(|(content, _)| {
+      if content.contains('\n') {
+        // Keep all multi-line blocks
+        true
+      } else {
+        // For single-line duplications, count non-whitespace characters
+        let non_whitespace_count =
+          content.chars().filter(|c| !c.is_whitespace()).count();
+        // We want more than 3 non-whitespace characters for single-line duplications
+        non_whitespace_count > 3
+      }
+    })
+    .collect();
+
   // Sort duplications by: 1) number of lines, 2) total character length
-  multi_line_dups.sort_by(|a, b| {
+  let mut sorted_dups = filtered_dups;
+  sorted_dups.sort_by(|a, b| {
     // First compare by line count (number of newlines + 1)
     let a_lines = a.0.matches('\n').count() + 1;
     let b_lines = b.0.matches('\n').count() + 1;
@@ -336,7 +358,7 @@ pub fn find_multi_line_duplications(
     }
   });
 
-  multi_line_dups
+  sorted_dups
 }
 
 #[test]
