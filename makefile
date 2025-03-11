@@ -38,7 +38,7 @@ release:
 	@echo '1. `cai changelog <first-commit-hash>`'
 	@echo '2. `git add ./changelog.md && git commit -m "Update changelog"`'
 	@echo '3. `cargo release major / minor / patch`'
-	@echo '4. Create a new GitHub release at https://github.com/ad-si/cai/releases/new'
+	@echo '4. Create a new GitHub release at https://github.com/ad-si/Textalyzer/releases/new'
 	@echo \
 		"5. Announce release on \n" \
 		"   - https://x.com \n" \

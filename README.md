@@ -13,7 +13,7 @@ CLI | Web
 
 ## Usage
 
-```
+```sh
 # Word frequency histogram
 textalyzer histogram <filepath>
 
