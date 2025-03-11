@@ -1,12 +1,10 @@
 use wasm_bindgen::prelude::*;
 
 use textalyzer::{
-  find_multi_line_duplications,
-  format_freq_map,
-  generate_frequency_map,
+  duplication::find_multi_line_duplications,
+  frequency::{format_freq_map, generate_frequency_map},
   types::FileEntry,
   types::MappedContent,
-  //
 };
 
 #[wasm_bindgen]
