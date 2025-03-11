@@ -2,6 +2,7 @@ pub mod types;
 
 extern crate colored;
 extern crate ignore;
+extern crate memmap2;
 extern crate pad;
 extern crate rayon;
 extern crate terminal_size;
@@ -9,11 +10,12 @@ extern crate unicode_width;
 
 use colored::Colorize;
 use ignore::WalkBuilder;
+use memmap2::MmapOptions;
 use pad::{Alignment, PadStr};
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -111,7 +113,7 @@ pub fn format_freq_map(freq_map: HashMap<String, i32>) -> String {
 }
 
 /// Merge lines from multiple files that pass the given filter
-/// into a single list.
+/// into a single list. Works with both memory mapped and string content.
 fn merge_file_lines(
   filter: &dyn Fn(&&str) -> bool,
   files: Vec<FileEntry>,
@@ -119,16 +121,41 @@ fn merge_file_lines(
   files
     .iter()
     .flat_map(|file| {
-      file
-        .content
-        .lines()
-        .enumerate()
-        .filter(|(_num, line)| !line.trim().is_empty() && filter(line))
-        .map(move |(num, line)| LineEntry {
-          file_name: file.name.clone(),
-          line_number: (num as u32 + 1),
-          content: line.to_string(),
-        })
+      // Process based on content type
+      match &file.content {
+        types::MappedContent::Mapped(mmap) => {
+          // Convert mmap to string slice
+          if let Ok(content) = std::str::from_utf8(mmap) {
+            // Process the content by lines
+            content
+              .lines()
+              .enumerate()
+              .filter(|(_num, line)| !line.trim().is_empty() && filter(line))
+              .map(move |(num, line)| LineEntry {
+                file_name: file.name.clone(),
+                line_number: (num as u32 + 1),
+                content: line.to_string(),
+              })
+              .collect::<Vec<_>>()
+          } else {
+            // Skip invalid UTF-8 content
+            Vec::new()
+          }
+        },
+        types::MappedContent::String(content) => {
+          // Process string content
+          content
+            .lines()
+            .enumerate()
+            .filter(|(_num, line)| !line.trim().is_empty() && filter(line))
+            .map(move |(num, line)| LineEntry {
+              file_name: file.name.clone(),
+              line_number: (num as u32 + 1),
+              content: line.to_string(),
+            })
+            .collect::<Vec<_>>()
+        }
+      }
     })
     .collect()
 }
@@ -137,11 +164,11 @@ fn merge_file_lines(
 fn test_merge_file_lines() {
   let file1 = FileEntry {
     name: "file1.txt".to_string(),
-    content: "Line one\nLine Two\n".to_string(),
+    content: types::MappedContent::String("Line one\nLine Two\n".to_string()),
   };
   let file2 = FileEntry {
     name: "file2.txt".to_string(),
-    content: "Another line\n".to_string(),
+    content: types::MappedContent::String("Another line\n".to_string()),
   };
   let lines = merge_file_lines(
     &|line: &&str| line.trim().len() > 5,
@@ -169,6 +196,7 @@ fn test_merge_file_lines() {
 }
 
 /// Find duplications in a given text.
+/// Works with both memory mapped files and regular string content.
 pub fn find_duplicate_lines(
   files: Vec<FileEntry>,
 ) -> Vec<(String, Vec<(String, u32)>)> {
@@ -208,21 +236,38 @@ pub fn find_duplicate_lines(
 /// For single-line duplications, it only includes lines with more than 3 non-whitespace characters.
 /// Multi-line duplications are always included.
 /// When duplications overlap, only the longest one is kept.
+/// 
+/// Uses memory mapping for improved performance with large files.
 pub fn find_multi_line_duplications(
   files: Vec<FileEntry>,
 ) -> Vec<(String, Vec<(String, u32)>)> {
   // Type definitions to reduce complexity
-  type FileLines<'a> = Vec<&'a str>;
   type Location = (String, u32);
-  type LineIndex<'a> = HashMap<&'a str, Vec<Location>>;
+  type LineIndex = HashMap<String, Vec<Location>>;
   type BlocksMap = HashMap<String, Vec<Location>>;
-  type SharedLineIndex<'a> = Arc<Mutex<LineIndex<'a>>>;
+  type SharedLineIndex = Arc<Mutex<LineIndex>>;
   type SharedBlocksMap = Arc<Mutex<BlocksMap>>;
   
-  // Store the parsed lines for each file to avoid repeated parsing
-  let file_lines_map: HashMap<String, FileLines> = files
+  // Create a mapping of file lines for each file
+  let file_lines_map: HashMap<String, Vec<String>> = files
     .iter()
-    .map(|f| (f.name.clone(), f.content.lines().collect()))
+    .map(|f| {
+      // Get the lines from either mapped or string content
+      let lines = match &f.content {
+        types::MappedContent::Mapped(mmap) => {
+          // Convert memory map to string slice
+          if let Ok(content) = std::str::from_utf8(mmap) {
+            content.lines().map(String::from).collect()
+          } else {
+            Vec::new() // Skip invalid UTF-8
+          }
+        },
+        types::MappedContent::String(content) => {
+          content.lines().map(String::from).collect()
+        }
+      };
+      (f.name.clone(), lines)
+    })
     .collect();
   
   // Create initial line index - map from line content to locations
@@ -231,23 +276,24 @@ pub fn find_multi_line_duplications(
   
   // Build the initial index of duplicate lines in parallel
   files.par_iter().for_each(|file_entry| {
-    let file_lines = file_lines_map.get(&file_entry.name).unwrap();
-    let mut local_entries = Vec::new();
-    
-    // Process each line in the file and store entries in a local collection
-    for (i, line) in file_lines.iter().enumerate() {
-      if !line.trim().is_empty() {
-        local_entries.push((
-          *line, 
-          (file_entry.name.clone(), (i + 1) as u32)
-        ));
+    if let Some(file_lines) = file_lines_map.get(&file_entry.name) {
+      let mut local_entries = Vec::new();
+      
+      // Process each line in the file and store entries in a local collection
+      for (i, line) in file_lines.iter().enumerate() {
+        if !line.trim().is_empty() {
+          local_entries.push((
+            line.clone(), 
+            (file_entry.name.clone(), (i + 1) as u32)
+          ));
+        }
       }
-    }
-    
-    // Update the shared line index less frequently
-    let mut index = line_index.lock().unwrap();
-    for (line, location) in local_entries {
-      index.entry(line).or_default().push(location);
+      
+      // Update the shared line index less frequently
+      let mut index = line_index.lock().unwrap();
+      for (line, location) in local_entries {
+        index.entry(line).or_default().push(location);
+      }
     }
   });
   
@@ -258,14 +304,14 @@ pub fn find_multi_line_duplications(
     .expect("Failed to unwrap Mutex");
   
   // Only keep lines that appear in multiple locations (duplicates)
-  let duplicate_lines: HashMap<&str, Vec<(String, u32)>> = raw_line_index
+  let duplicate_lines: HashMap<String, Vec<(String, u32)>> = raw_line_index
     .into_iter()
     .filter(|(_, locations)| locations.len() > 1)
     .collect();
   
   // For efficiency, only consider lines that appear as duplicates
-  let duplicate_line_set: std::collections::HashSet<&str> = 
-    duplicate_lines.keys().copied().collect();
+  let duplicate_line_set: std::collections::HashSet<String> = 
+    duplicate_lines.keys().cloned().collect();
   
   // Create a thread-safe container for blocks
   let blocks_map: SharedBlocksMap = Arc::new(Mutex::new(HashMap::new()));
@@ -273,82 +319,88 @@ pub fn find_multi_line_duplications(
   // Process each file in parallel
   files.par_iter().for_each(|file_entry| {
     let file_name = &file_entry.name;
-    let file_lines = file_lines_map.get(file_name).unwrap();
-    let file_len = file_lines.len();
-    
-    // Local collection to minimize locks
-    let mut local_blocks: HashMap<String, Vec<(String, u32)>> = HashMap::new();
-    
-    // For each potential starting position
-    for start_idx in 0..file_len {
-      // Skip if the first line isn't a known duplicate or is empty
-      let first_line = file_lines[start_idx];
-      if !duplicate_line_set.contains(first_line) || first_line.trim().is_empty() {
-        continue;
-      }
+    if let Some(file_lines) = file_lines_map.get(file_name) {
+      let file_len = file_lines.len();
       
-      // Get all locations where this first line appears
-      if let Some(locations) = duplicate_lines.get(first_line) {
-        // For each other place this line appears
-        for (other_file, other_line_num) in locations {
-          // Skip if it's the same position we're checking from
-          if other_file == file_name && *other_line_num == (start_idx as u32 + 1) {
+      // Local collection to minimize locks
+      let mut local_blocks: HashMap<String, Vec<(String, u32)>> = HashMap::new();
+      
+      // For each potential starting position
+      for start_idx in 0..file_len {
+        // Skip if the first line isn't a known duplicate or is empty
+        if start_idx < file_lines.len() {
+          let first_line = &file_lines[start_idx];
+          if !duplicate_line_set.contains(first_line) || first_line.trim().is_empty() {
             continue;
           }
           
-          // Look up the other file's lines
-          let other_file_lines = file_lines_map.get(other_file).unwrap();
-          let other_start_idx = (*other_line_num - 1) as usize;
-          let other_file_len = other_file_lines.len();
-          
-          // Calculate maximum possible match length
-          let max_len = std::cmp::min(
-            file_len - start_idx,
-            other_file_len - other_start_idx
-          );
-          
-          // Find how many consecutive lines match
-          let mut match_len = 0;
-          for offset in 0..max_len {
-            if file_lines[start_idx + offset] == other_file_lines[other_start_idx + offset] {
-              match_len += 1;
-            } else {
-              break;
-            }
-          }
-          
-          // Only process matches of at least 1 line
-          if match_len >= 1 {
-            // Efficiently build the block string
-            let block = file_lines[start_idx..(start_idx + match_len)].join("\n");
-            
-            // Use our local hash map for faster lookups
-            let locations = local_blocks.entry(block).or_default();
-            
-            // Add the current file location if not already present
-            let current_loc = (file_name.clone(), start_idx as u32 + 1);
-            if !locations.contains(&current_loc) {
-              locations.push(current_loc);
-            }
-            
-            // Add the other location if not already present
-            let other_loc = (other_file.clone(), *other_line_num);
-            if !locations.contains(&other_loc) {
-              locations.push(other_loc);
+          // Get all locations where this first line appears
+          if let Some(locations) = duplicate_lines.get(first_line) {
+            // For each other place this line appears
+            for (other_file, other_line_num) in locations {
+              // Skip if it's the same position we're checking from
+              if other_file == file_name && *other_line_num == (start_idx as u32 + 1) {
+                continue;
+              }
+              
+              // Look up the other file's lines
+              if let Some(other_file_lines) = file_lines_map.get(other_file) {
+                let other_start_idx = (*other_line_num - 1) as usize;
+                let other_file_len = other_file_lines.len();
+                
+                // Calculate maximum possible match length
+                let max_len = std::cmp::min(
+                  file_len - start_idx,
+                  other_file_len - other_start_idx
+                );
+                
+                // Find how many consecutive lines match
+                let mut match_len = 0;
+                for offset in 0..max_len {
+                  if start_idx + offset < file_lines.len() && 
+                     other_start_idx + offset < other_file_lines.len() && 
+                     file_lines[start_idx + offset] == other_file_lines[other_start_idx + offset] {
+                    match_len += 1;
+                  } else {
+                    break;
+                  }
+                }
+                
+                // Only process matches of at least 1 line
+                if match_len >= 1 {
+                  // Efficiently build the block string
+                  let block = file_lines[start_idx..(start_idx + match_len)].join("\n");
+                  
+                  // Use our local hash map for faster lookups
+                  let locations = local_blocks.entry(block).or_default();
+                  
+                  // Add the current file location if not already present
+                  let current_loc = (file_name.clone(), start_idx as u32 + 1);
+                  if !locations.contains(&current_loc) {
+                    locations.push(current_loc);
+                  }
+                  
+                  // Add the other location if not already present
+                  let other_loc = (other_file.clone(), *other_line_num);
+                  if !locations.contains(&other_loc) {
+                    locations.push(other_loc);
+                  }
+                }
+              }
             }
           }
         }
       }
-    }
-    
-    // Merge local blocks into the shared map
-    if !local_blocks.is_empty() {
-      let mut shared_blocks = blocks_map.lock().unwrap();
-      for (block, locations) in local_blocks {
-        let shared_locations = shared_blocks.entry(block).or_default();
-        for loc in locations {
-          if !shared_locations.contains(&loc) {
-            shared_locations.push(loc);
+      
+      // Merge local blocks into the shared map
+      if !local_blocks.is_empty() {
+        let mut shared_blocks = blocks_map.lock().unwrap();
+        for (block, locations) in local_blocks {
+          let shared_locations = shared_blocks.entry(block).or_default();
+          for loc in locations {
+            if !shared_locations.contains(&loc) {
+              shared_locations.push(loc);
+            }
           }
         }
       }
@@ -435,7 +487,7 @@ pub fn find_multi_line_duplications(
 fn test_find_duplicate_lines() {
   let file1 = FileEntry {
     name: "file1.txt".to_string(),
-    content: "\
+    content: types::MappedContent::String("\
             This is a test.\n\
             This is only a test.\n\
             This is a test.\n\
@@ -445,11 +497,11 @@ fn test_find_duplicate_lines() {
             # Ignore short lines\n\
             abc\n\
             abc\n"
-      .to_string(),
+      .to_string()),
   };
   let file2 = FileEntry {
     name: "file2.txt".to_string(),
-    content: "This is a test.\n".to_string(),
+    content: types::MappedContent::String("This is a test.\n".to_string()),
   };
   let duplications = find_duplicate_lines(vec![file1, file2]);
   let expected_duplications = vec![(
@@ -468,7 +520,7 @@ fn test_find_duplicate_lines() {
 fn test_find_multi_line_duplications() {
   let file1 = FileEntry {
     name: "file1.txt".to_string(),
-    content: "\
+    content: types::MappedContent::String("\
             This is a test.\n\
             This is a second line.\n\
             This is a third line.\n\
@@ -477,17 +529,17 @@ fn test_find_multi_line_duplications() {
             This is a test.\n\
             This is a second line.\n\
             A different third line.\n"
-      .to_string(),
+      .to_string()),
   };
   let file2 = FileEntry {
     name: "file2.txt".to_string(),
-    content: "\
+    content: types::MappedContent::String("\
             Something unrelated.\n\
             This is a test.\n\
             This is a second line.\n\
             This is a third line.\n\
             Final line.\n"
-      .to_string(),
+      .to_string()),
   };
 
   let files = vec![file1, file2];
@@ -516,18 +568,18 @@ fn test_find_multi_line_duplications() {
 fn test_multi_line_duplications_with_non_overlapping() {
   let file1 = FileEntry {
     name: "file1.txt".to_string(),
-    content: "\
+    content: types::MappedContent::String("\
             Block A line 1.\n\
             Block A line 2.\n\
             Block A line 3.\n\
             Some middle content.\n\
             Block B line 1.\n\
             Block B line 2.\n"
-      .to_string(),
+      .to_string()),
   };
   let file2 = FileEntry {
     name: "file2.txt".to_string(),
-    content: "\
+    content: types::MappedContent::String("\
             Different stuff.\n\
             Block A line 1.\n\
             Block A line 2.\n\
@@ -535,7 +587,7 @@ fn test_multi_line_duplications_with_non_overlapping() {
             Some other content.\n\
             Block B line 1.\n\
             Block B line 2.\n"
-      .to_string(),
+      .to_string()),
   };
 
   let files = vec![file1, file2];
@@ -611,22 +663,69 @@ fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
   Ok(files)
 }
 
-/// Load multiple files as FileEntry structs using parallel processing
+/// Load multiple files as FileEntry structs using memory mapping for improved performance
 fn load_files(paths: Vec<PathBuf>) -> Result<Vec<FileEntry>, Box<dyn Error>> {
   // Use rayon's parallel iterator to process files in parallel
   let file_entries: Vec<Option<FileEntry>> = paths
     .par_iter()
     .map(|path| {
-      // Skip binary files and files we can't read
-      match fs::read_to_string(path) {
-        Ok(content) if !content.contains('\0') => {
-          // Simple check for binary files
-          Some(FileEntry {
+      // Try to memory map the file first
+      let result = (|| -> Result<FileEntry, Box<dyn Error>> {
+        // Open the file
+        let file = match File::open(path) {
+          Ok(f) => f,
+          Err(e) => return Err(format!("Failed to open {}: {}", path.display(), e).into()),
+        };
+        
+        // Check if the file is empty
+        let metadata = file.metadata()?;
+        if metadata.len() == 0 {
+          // Empty files can't be memory mapped, use empty string instead
+          return Ok(FileEntry {
             name: path.to_string_lossy().into_owned(),
-            content,
-          })
+            content: types::MappedContent::String(String::new()),
+          });
         }
-        _ => None,
+        
+        // Try to memory map the file
+        match unsafe { MmapOptions::new().map(&file) } {
+          Ok(mmap) => {
+            // Check if this looks like a binary file (contains null bytes)
+            if mmap.iter().any(|&b| b == 0) {
+              return Err("Binary file detected".into());
+            }
+            
+            // Basic UTF-8 validation
+            match std::str::from_utf8(&mmap) {
+              Ok(_) => Ok(FileEntry {
+                name: path.to_string_lossy().into_owned(),
+                content: types::MappedContent::Mapped(mmap),
+              }),
+              Err(_) => Err("Invalid UTF-8 file".into()),
+            }
+          },
+          Err(e) => Err(format!("Failed to mmap {}: {}", path.display(), e).into()),
+        }
+      })();
+      
+      // If memory mapping fails, fall back to regular string loading for very small files
+      match result {
+        Ok(entry) => Some(entry),
+        Err(_) => {
+          // Fall back to reading the file as a string for small files
+          match fs::metadata(path) {
+            Ok(metadata) if metadata.len() < 1024 * 10 => { // Only fall back for files < 10KB
+              match fs::read_to_string(path) {
+                Ok(content) if !content.contains('\0') => Some(FileEntry {
+                  name: path.to_string_lossy().into_owned(),
+                  content: types::MappedContent::String(content),
+                }),
+                _ => None,
+              }
+            },
+            _ => None,
+          }
+        }
       }
     })
     .collect();
@@ -906,9 +1005,20 @@ mod tests {
 
     assert_eq!(file_entries.len(), 2);
     assert_eq!(file_entries[0].name, file1.to_string_lossy());
-    assert_eq!(file_entries[0].content, "Test content 1");
+    // Content checks using our PartialEq implementation
+    assert!(file_entries[0].content == "Test content 1");
     assert_eq!(file_entries[1].name, file2.to_string_lossy());
-    assert_eq!(file_entries[1].content, "Test content 2");
+    assert!(file_entries[1].content == "Test content 2");
+
+    // Additional check with as_str()
+    match &file_entries[0].content {
+      types::MappedContent::Mapped(mmap) => {
+        assert_eq!(std::str::from_utf8(mmap).unwrap(), "Test content 1");
+      },
+      types::MappedContent::String(s) => {
+        assert_eq!(s, "Test content 1");
+      }
+    }
 
     Ok(())
   }
@@ -948,7 +1058,7 @@ mod tests {
       files.push(file_path);
     }
     
-    // Load files
+    // Load files - now using memory mapping
     let file_entries = load_files(files)?;
     
     // Measure performance

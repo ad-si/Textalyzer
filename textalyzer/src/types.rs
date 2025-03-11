@@ -1,4 +1,5 @@
 extern crate clap;
+extern crate memmap2;
 
 use self::clap::Subcommand;
 
@@ -17,10 +18,60 @@ pub struct Config {
   pub command: Command,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FileEntry {
   pub name: String,
-  pub content: String,
+  pub content: MappedContent,
+}
+
+#[derive(Debug)]
+pub enum MappedContent {
+  Mapped(memmap2::Mmap),
+  String(String),
+}
+
+// Implement methods for MappedContent for easier use
+impl MappedContent {
+  // Get content as a string slice
+  pub fn as_str(&self) -> Option<&str> {
+    match self {
+      MappedContent::Mapped(mmap) => std::str::from_utf8(mmap).ok(),
+      MappedContent::String(s) => Some(s),
+    }
+  }
+  
+  // Get content as a string
+  pub fn to_string(&self) -> Option<String> {
+    self.as_str().map(String::from)
+  }
+}
+
+// Implement PartialEq to compare with strings
+impl PartialEq<str> for MappedContent {
+  fn eq(&self, other: &str) -> bool {
+    match self.as_str() {
+      Some(s) => s == other,
+      None => false,
+    }
+  }
+}
+
+impl PartialEq<&str> for MappedContent {
+  fn eq(&self, other: &&str) -> bool {
+    match self.as_str() {
+      Some(s) => s == *other,
+      None => false,
+    }
+  }
+}
+
+impl PartialEq<String> for MappedContent {
+  fn eq(&self, other: &String) -> bool {
+    match self.as_str() {
+      Some(s) => s == other,
+      None => false,
+    }
+  }
 }
 
 #[derive(PartialEq, Debug)]
