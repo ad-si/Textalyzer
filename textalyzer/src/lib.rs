@@ -208,202 +208,184 @@ pub fn find_duplicate_lines(
 pub fn find_multi_line_duplications(
   files: Vec<FileEntry>,
 ) -> Vec<(String, Vec<(String, u32)>)> {
-  let lines = merge_file_lines(
-    &|line: &&str| !line.trim().is_empty(), // Include all non-empty lines
-    files.clone(),                          //
-  );
-
-  // Create a map of file_entries by name for quick lookup
-  let file_map: HashMap<String, &FileEntry> =
-    files.iter().map(|f| (f.name.clone(), f)).collect();
-
-  // Group lines by content to find duplicated individual lines first
-  let mut line_map: HashMap<&String, Vec<(String, u32)>> = HashMap::new();
-  for line_entry in lines.iter() {
-    let line_count = line_map.entry(&line_entry.content).or_default();
-    line_count.push((line_entry.file_name.clone(), line_entry.line_number));
+  // Pre-compute file lines for each file only once and reuse
+  type FileLines<'a> = Vec<&'a str>;
+  
+  // Store the parsed lines for each file to avoid repeated parsing
+  let file_lines_map: HashMap<String, FileLines> = files
+    .iter()
+    .map(|f| (f.name.clone(), f.content.lines().collect()))
+    .collect();
+  
+  // Create initial line index - map from line content to locations
+  // Using a hash-based approach for faster lookups
+  let mut line_index: HashMap<&str, Vec<(String, u32)>> = HashMap::new();
+  
+  // Build the initial index of duplicate lines
+  for file_entry in &files {
+    let file_lines = file_lines_map.get(&file_entry.name).unwrap();
+    
+    // Only add non-empty lines to the index
+    for (i, line) in file_lines.iter().enumerate() {
+      if !line.trim().is_empty() {
+        line_index
+          .entry(line)
+          .or_default()
+          .push((file_entry.name.clone(), (i + 1) as u32));
+      }
+    }
   }
-
-  // Filter to only keep lines that appear more than once
-  let dup_lines: HashMap<&String, Vec<(String, u32)>> = line_map
+  
+  // Only keep lines that appear in multiple locations (duplicates)
+  let duplicate_lines: HashMap<&str, Vec<(String, u32)>> = line_index
     .into_iter()
     .filter(|(_, locations)| locations.len() > 1)
     .collect();
-
-  // Store multi-line duplications
-  let mut multi_line_dups: Vec<(String, Vec<(String, u32)>)> = Vec::new();
-
-  // For each file in the input
+  
+  // Store unique duplication blocks with their locations
+  // Using a HashMap for faster exact matches lookups
+  let mut blocks_map: HashMap<String, Vec<(String, u32)>> = HashMap::new();
+  
+  // For efficiency, only consider lines that appear as duplicates
+  let duplicate_line_set: std::collections::HashSet<&str> = 
+    duplicate_lines.keys().copied().collect();
+  
+  // For each file
   for file_entry in &files {
-    let file_lines: Vec<&str> = file_entry.content.lines().collect();
-
-    // For each starting position in this file
-    for start_idx in 0..file_lines.len() {
-      // Skip line if it's not in our duplicated lines map
+    let file_name = &file_entry.name;
+    let file_lines = file_lines_map.get(file_name).unwrap();
+    let file_len = file_lines.len();
+    
+    // For each potential starting position
+    for start_idx in 0..file_len {
+      // Skip if the first line isn't a known duplicate or is empty
       let first_line = file_lines[start_idx];
-      let first_line_string = first_line.to_string();
-      if first_line.trim().is_empty()
-        || !dup_lines.contains_key(&first_line_string)
-      {
+      if !duplicate_line_set.contains(first_line) || first_line.trim().is_empty() {
         continue;
       }
-
-      // Find all places where this line appears (in other files or later in this file)
-      let line_locations = dup_lines.get(&first_line_string).unwrap();
-
-      // For each location of this first line
-      for (other_file, other_line_num) in line_locations {
-        // Skip if it's the same position we're checking from
-        if other_file == &file_entry.name
-          && *other_line_num == (start_idx as u32 + 1)
-        {
-          continue;
-        }
-
-        // Try to extend the match as far as possible
-        let other_file_entry = file_map.get(other_file).unwrap();
-        let other_file_lines: Vec<&str> =
-          other_file_entry.content.lines().collect();
-        let other_start_idx = (*other_line_num - 1) as usize;
-
-        // Determine how many consecutive lines match
-        let mut consecutive_match_count = 0;
-        let max_possible_matches = std::cmp::min(
-          file_lines.len() - start_idx,
-          other_file_lines.len() - other_start_idx,
-        );
-
-        for offset in 0..max_possible_matches {
-          if file_lines[start_idx + offset]
-            == other_file_lines[other_start_idx + offset]
-          {
-            consecutive_match_count += 1;
-          } else {
-            break;
+      
+      // Get all locations where this first line appears
+      if let Some(locations) = duplicate_lines.get(first_line) {
+        // For each other place this line appears
+        for (other_file, other_line_num) in locations {
+          // Skip if it's the same position we're checking from
+          if other_file == file_name && *other_line_num == (start_idx as u32 + 1) {
+            continue;
           }
-        }
-
-        // Only consider matches of at least 1 line
-        if consecutive_match_count >= 1 {
-          // Combine the matching lines into a single text block
-          let block = file_lines
-            [start_idx..(start_idx + consecutive_match_count)]
-            .join("\n");
-
-          // Create an entry for this multi-line match
-          let mut found = false;
-          for (existing_block, locations) in &mut multi_line_dups {
-            if *existing_block == block {
-              // This exact block already exists, just add the locations
-              if !locations
-                .contains(&(file_entry.name.clone(), start_idx as u32 + 1))
-              {
-                locations.push((file_entry.name.clone(), start_idx as u32 + 1));
-              }
-              if !locations.contains(&(other_file.clone(), *other_line_num)) {
-                locations.push((other_file.clone(), *other_line_num));
-              }
-              found = true;
+          
+          // Look up the other file's lines
+          let other_file_lines = file_lines_map.get(other_file).unwrap();
+          let other_start_idx = (*other_line_num - 1) as usize;
+          let other_file_len = other_file_lines.len();
+          
+          // Calculate maximum possible match length
+          let max_len = std::cmp::min(
+            file_len - start_idx,
+            other_file_len - other_start_idx
+          );
+          
+          // Find how many consecutive lines match
+          let mut match_len = 0;
+          for offset in 0..max_len {
+            if file_lines[start_idx + offset] == other_file_lines[other_start_idx + offset] {
+              match_len += 1;
+            } else {
               break;
             }
           }
-
-          if !found {
-            // New duplication block
-            multi_line_dups.push((
-              block,
-              vec![
-                (file_entry.name.clone(), start_idx as u32 + 1),
-                (other_file.clone(), *other_line_num),
-              ],
-            ));
+          
+          // Only process matches of at least 1 line
+          if match_len >= 1 {
+            // Efficiently build the block string
+            let block = file_lines[start_idx..(start_idx + match_len)].join("\n");
+            
+            // Use our hash map for faster lookups
+            let locations = blocks_map.entry(block).or_default();
+            
+            // Add the current file location if not already present
+            let current_loc = (file_name.clone(), start_idx as u32 + 1);
+            if !locations.contains(&current_loc) {
+              locations.push(current_loc);
+            }
+            
+            // Add the other location if not already present
+            let other_loc = (other_file.clone(), *other_line_num);
+            if !locations.contains(&other_loc) {
+              locations.push(other_loc);
+            }
           }
         }
       }
     }
   }
-
-  // Filter duplications based on our criteria:
-  // 1. Keep all multi-line blocks (2+ lines)
-  // 2. For single lines, only keep those with more than 3 non-whitespace chars
-  let filtered_dups: Vec<(String, Vec<(String, u32)>)> = multi_line_dups
+  
+  // Convert to Vec and filter by our criteria
+  let mut all_blocks: Vec<(String, Vec<(String, u32)>)> = blocks_map
     .into_iter()
     .filter(|(content, _)| {
+      // Keep multi-line blocks 
       if content.contains('\n') {
-        // Keep all multi-line blocks
-        true
-      } else {
-        // For single-line duplications, count non-whitespace characters
-        let non_whitespace_count =
-          content.chars().filter(|c| !c.is_whitespace()).count();
-        // We want more than 3 non-whitespace characters for single-line duplications
-        non_whitespace_count > 3
+        return true;
       }
+      // For single lines, require more than 3 non-whitespace chars
+      let non_ws_count = content.chars().filter(|c| !c.is_whitespace()).count();
+      non_ws_count > 3
     })
     .collect();
-
-  // Sort duplications by: 1) number of lines, 2) total character length
-  let mut sorted_dups = filtered_dups;
-  sorted_dups.sort_by(|a, b| {
-    // First compare by line count (number of newlines + 1)
+  
+  // Sort by most lines first, then by length
+  all_blocks.sort_by(|a, b| {
     let a_lines = a.0.matches('\n').count() + 1;
     let b_lines = b.0.matches('\n').count() + 1;
-
+    
     let line_cmp = b_lines.cmp(&a_lines);
-
     if line_cmp == std::cmp::Ordering::Equal {
-      // If line count is the same, sort by content length
       b.0.len().cmp(&a.0.len())
     } else {
       line_cmp
     }
   });
-
-  // Handle overlapping duplications - only keep the longest ones
-  let mut non_overlapping_dups = Vec::new();
   
-  // Track used (line, file) pairs to detect overlaps
+  // Process overlapping duplications efficiently
+  let mut result = Vec::new();
+  // Using a more compact encoding of used positions
   let mut used_positions: HashMap<(String, u32), usize> = HashMap::new();
   
-  // Process sorted duplications (from longest to shortest)
-  for (content, locations) in sorted_dups {
+  for (content, locations) in all_blocks {
     let lines_count = content.matches('\n').count() + 1;
-    let mut new_locations = Vec::new();
+    let mut valid_locations = Vec::new();
     
     // Check each location for overlap
     for (file, line_num) in &locations {
-      // Calculate range of lines covered by this duplication
       let end_line = line_num + lines_count as u32 - 1;
-      let mut position_is_free = true;
+      let mut position_free = true;
       
-      // Check if any line in this range is already used
+      // Fast overlap check - break early
       for l in *line_num..=end_line {
-        if let Some(dup_idx) = used_positions.get(&(file.clone(), l)) {
-          // Only consider it an overlap if it belongs to a duplication we've already kept
-          if *dup_idx < non_overlapping_dups.len() {
-            position_is_free = false;
+        if let Some(idx) = used_positions.get(&(file.clone(), l)) {
+          if *idx < result.len() {
+            position_free = false;
             break;
           }
         }
       }
       
-      // If no overlap, add this location
-      if position_is_free {
-        new_locations.push((file.clone(), *line_num));
-        // Mark all lines used by this duplication
+      if position_free {
+        valid_locations.push((file.clone(), *line_num));
+        // Mark positions as used
         for l in *line_num..=end_line {
-          used_positions.insert((file.clone(), l), non_overlapping_dups.len());
+          used_positions.insert((file.clone(), l), result.len());
         }
       }
     }
     
-    // Only add this duplication if it has at least 2 non-overlapping locations
-    if new_locations.len() >= 2 {
-      non_overlapping_dups.push((content, new_locations));
+    // Only keep duplications with at least 2 valid locations
+    if valid_locations.len() >= 2 {
+      result.push((content, valid_locations));
     }
   }
-
-  non_overlapping_dups
+  
+  result
 }
 
 #[test]
