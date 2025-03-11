@@ -204,6 +204,7 @@ pub fn find_duplicate_lines(
 /// across files or within the same file, prioritizing longer sequences.
 /// For single-line duplications, it only includes lines with more than 3 non-whitespace characters.
 /// Multi-line duplications are always included.
+/// When duplications overlap, only the longest one is kept.
 pub fn find_multi_line_duplications(
   files: Vec<FileEntry>,
 ) -> Vec<(String, Vec<(String, u32)>)> {
@@ -324,7 +325,7 @@ pub fn find_multi_line_duplications(
 
   // Filter duplications based on our criteria:
   // 1. Keep all multi-line blocks (2+ lines)
-  // 2. For single lines, only keep those with more than 2 non-whitespace chars
+  // 2. For single lines, only keep those with more than 3 non-whitespace chars
   let filtered_dups: Vec<(String, Vec<(String, u32)>)> = multi_line_dups
     .into_iter()
     .filter(|(content, _)| {
@@ -358,7 +359,51 @@ pub fn find_multi_line_duplications(
     }
   });
 
-  sorted_dups
+  // Handle overlapping duplications - only keep the longest ones
+  let mut non_overlapping_dups = Vec::new();
+  
+  // Track used (line, file) pairs to detect overlaps
+  let mut used_positions: HashMap<(String, u32), usize> = HashMap::new();
+  
+  // Process sorted duplications (from longest to shortest)
+  for (content, locations) in sorted_dups {
+    let lines_count = content.matches('\n').count() + 1;
+    let mut new_locations = Vec::new();
+    
+    // Check each location for overlap
+    for (file, line_num) in &locations {
+      // Calculate range of lines covered by this duplication
+      let end_line = line_num + lines_count as u32 - 1;
+      let mut position_is_free = true;
+      
+      // Check if any line in this range is already used
+      for l in *line_num..=end_line {
+        if let Some(dup_idx) = used_positions.get(&(file.clone(), l)) {
+          // Only consider it an overlap if it belongs to a duplication we've already kept
+          if *dup_idx < non_overlapping_dups.len() {
+            position_is_free = false;
+            break;
+          }
+        }
+      }
+      
+      // If no overlap, add this location
+      if position_is_free {
+        new_locations.push((file.clone(), *line_num));
+        // Mark all lines used by this duplication
+        for l in *line_num..=end_line {
+          used_positions.insert((file.clone(), l), non_overlapping_dups.len());
+        }
+      }
+    }
+    
+    // Only add this duplication if it has at least 2 non-overlapping locations
+    if new_locations.len() >= 2 {
+      non_overlapping_dups.push((content, new_locations));
+    }
+  }
+
+  non_overlapping_dups
 }
 
 #[test]
@@ -423,36 +468,79 @@ fn test_find_multi_line_duplications() {
   let files = vec![file1, file2];
   let duplications = find_multi_line_duplications(files);
 
-  // The test should have at least 2 duplication entries
-  assert!(duplications.len() >= 2);
+  // With overlap handling, we should only have the 3-line duplication
+  // because it's longer than the 2-line duplication and they overlap
+  assert_eq!(duplications.len(), 1, "Expected exactly 1 duplication");
 
   // Look for the 3-line duplication
   let three_line_dup =
     "This is a test.\nThis is a second line.\nThis is a third line.";
-  let mut found_three_line = false;
+  
+  // The only duplication should be the 3-line one
+  let (block, locations) = &duplications[0];
+  assert_eq!(block, three_line_dup, "Expected 3-line duplication");
+  assert_eq!(locations.len(), 2, "Expected 2 locations for 3-line duplication");
+  assert!(locations.contains(&("file1.txt".to_string(), 1)));
+  assert!(locations.contains(&("file2.txt".to_string(), 2)));
+  
+  // The 2-line duplication should not be present because it's covered
+  // by the 3-line duplication at the same starting positions
+}
 
-  // Look for the 2-line duplication
-  let two_line_dup = "This is a test.\nThis is a second line.";
-  let mut found_two_line = false;
+#[test]
+fn test_multi_line_duplications_with_non_overlapping() {
+  let file1 = FileEntry {
+    name: "file1.txt".to_string(),
+    content: "\
+            Block A line 1.\n\
+            Block A line 2.\n\
+            Block A line 3.\n\
+            Some middle content.\n\
+            Block B line 1.\n\
+            Block B line 2.\n"
+      .to_string(),
+  };
+  let file2 = FileEntry {
+    name: "file2.txt".to_string(),
+    content: "\
+            Different stuff.\n\
+            Block A line 1.\n\
+            Block A line 2.\n\
+            Block A line 3.\n\
+            Some other content.\n\
+            Block B line 1.\n\
+            Block B line 2.\n"
+      .to_string(),
+  };
 
+  let files = vec![file1, file2];
+  let duplications = find_multi_line_duplications(files);
+
+  // We should have both duplications since they don't overlap
+  assert_eq!(duplications.len(), 2, "Expected exactly 2 duplications");
+
+  let block_a = "Block A line 1.\nBlock A line 2.\nBlock A line 3.";
+  let block_b = "Block B line 1.\nBlock B line 2.";
+  
+  let mut found_block_a = false;
+  let mut found_block_b = false;
+  
   for (block, locations) in &duplications {
-    if block == three_line_dup {
-      found_three_line = true;
+    if block == block_a {
+      found_block_a = true;
       assert_eq!(locations.len(), 2);
       assert!(locations.contains(&("file1.txt".to_string(), 1)));
       assert!(locations.contains(&("file2.txt".to_string(), 2)));
-    } else if block == two_line_dup {
-      found_two_line = true;
-      assert_eq!(locations.len(), 3);
-      assert!(locations.contains(&("file1.txt".to_string(), 1)));
-      assert!(locations.contains(&("file1.txt".to_string(), 6)));
-      assert!(locations.contains(&("file2.txt".to_string(), 2)));
+    } else if block == block_b {
+      found_block_b = true;
+      assert_eq!(locations.len(), 2);
+      assert!(locations.contains(&("file1.txt".to_string(), 5)));
+      assert!(locations.contains(&("file2.txt".to_string(), 6)));
     }
   }
-
-  // Make sure we found both duplications
-  assert!(found_three_line, "Did not find 3-line duplication");
-  assert!(found_two_line, "Did not find 2-line duplication");
+  
+  assert!(found_block_a, "Did not find Block A duplication");
+  assert!(found_block_b, "Did not find Block B duplication");
 }
 
 /// Run Textalyzer with the given configuration.
