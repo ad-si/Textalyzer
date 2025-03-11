@@ -718,6 +718,10 @@ fn output_duplications<A: Write>(
 
     // Then write the file paths with the end marker
     writeln!(&mut output_stream, "{}", current_line)?;
+    
+    // Add separator line of dashes after each duplication
+    let separator = "-".repeat(term_width);
+    writeln!(&mut output_stream, "{}", separator)?;
   }
 
   Ok(())
