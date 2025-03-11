@@ -47,26 +47,13 @@ pub fn output_duplications<A: Write>(
   writeln!(&mut output_stream, "{}\n", count_msg.bold())?;
 
   for (line, line_locs) in duplications {
-    // Format the duplicate line with borders but no background color
-    let formatted_line = if is_light {
-      // In light themes, make the line darker for better readability
-      line.bold()
-    } else {
-      // In dark themes, use normal color for better readability
-      line.normal()
-    };
-
-    write!(&mut output_stream, "{:76}", formatted_line)?;
-
     // Get terminal width or default to 80 if it can't be determined
     let term_width = terminal_size()
       .map(|(Width(w), _)| w as usize)
       .unwrap_or(80);
 
-    // Line displayed on the left side is fixed at 80 chars (76 for content + 4 for borders and spaces)
+    // Configure remaining width for file paths
     let left_width = 80;
-
-    // Remaining width for file paths
     let avail_width = if term_width > left_width {
       term_width - left_width
     } else {
@@ -93,16 +80,16 @@ pub fn output_duplications<A: Write>(
       };
 
       let list_marker = if is_light {
-        "\n└─ ".blue().bold()
+        " └─ ".blue().bold()
       } else {
-        "\n└─ ".bright_blue().bold()
+        " └─ ".bright_blue().bold()
       };
 
       // Check if adding this location would exceed the available width
       if !current_line.is_empty()
         && current_line.len() + list_marker.len() + loc_str.len() > avail_width
       {
-        write!(&mut output_stream, "{}", current_line)?;
+        writeln!(&mut output_stream, "{}", current_line)?;
 
         // Start a new line
         write!(&mut output_stream, "{}", list_marker)?;
@@ -113,8 +100,20 @@ pub fn output_duplications<A: Write>(
       }
     }
 
-    // Then write the file paths with the end marker
-    writeln!(&mut output_stream, "{}", current_line)?;
+    // Write the file paths
+    writeln!(&mut output_stream, "{}\n", current_line)?;
+
+    // Format the duplicate line with borders but no background color
+    let formatted_line = if is_light {
+      // In light themes, make the line darker for better readability
+      line.bold()
+    } else {
+      // In dark themes, use normal color for better readability
+      line.normal()
+    };
+
+    write!(&mut output_stream, "{:76}", formatted_line)?;
+    writeln!(&mut output_stream)?;
 
     // Add separator line of dashes after each duplication
     let separator = "-".repeat(term_width);
