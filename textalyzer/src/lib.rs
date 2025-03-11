@@ -198,6 +198,147 @@ pub fn find_duplicate_lines(
   duplications
 }
 
+/// Find multi-line duplications across files.
+///
+/// This function detects sequences of consecutive lines that are duplicated
+/// across files or within the same file, prioritizing longer sequences.
+pub fn find_multi_line_duplications(
+  files: Vec<FileEntry>,
+) -> Vec<(String, Vec<(String, u32)>)> {
+  let lines = merge_file_lines(
+    &|line: &&str| !line.trim().is_empty(), // Include all non-empty lines
+    files.clone(),                          //
+  );
+
+  // Create a map of file_entries by name for quick lookup
+  let file_map: HashMap<String, &FileEntry> =
+    files.iter().map(|f| (f.name.clone(), f)).collect();
+
+  // Group lines by content to find duplicated individual lines first
+  let mut line_map: HashMap<&String, Vec<(String, u32)>> = HashMap::new();
+  for line_entry in lines.iter() {
+    let line_count = line_map.entry(&line_entry.content).or_default();
+    line_count.push((line_entry.file_name.clone(), line_entry.line_number));
+  }
+
+  // Filter to only keep lines that appear more than once
+  let dup_lines: HashMap<&String, Vec<(String, u32)>> = line_map
+    .into_iter()
+    .filter(|(_, locations)| locations.len() > 1)
+    .collect();
+
+  // Store multi-line duplications
+  let mut multi_line_dups: Vec<(String, Vec<(String, u32)>)> = Vec::new();
+
+  // For each file in the input
+  for file_entry in &files {
+    let file_lines: Vec<&str> = file_entry.content.lines().collect();
+
+    // For each starting position in this file
+    for start_idx in 0..file_lines.len() {
+      // Skip line if it's not in our duplicated lines map
+      let first_line = file_lines[start_idx];
+      let first_line_string = first_line.to_string();
+      if first_line.trim().is_empty()
+        || !dup_lines.contains_key(&first_line_string)
+      {
+        continue;
+      }
+
+      // Find all places where this line appears (in other files or later in this file)
+      let line_locations = dup_lines.get(&first_line_string).unwrap();
+
+      // For each location of this first line
+      for (other_file, other_line_num) in line_locations {
+        // Skip if it's the same position we're checking from
+        if other_file == &file_entry.name
+          && *other_line_num == (start_idx as u32 + 1)
+        {
+          continue;
+        }
+
+        // Try to extend the match as far as possible
+        let other_file_entry = file_map.get(other_file).unwrap();
+        let other_file_lines: Vec<&str> =
+          other_file_entry.content.lines().collect();
+        let other_start_idx = (*other_line_num - 1) as usize;
+
+        // Determine how many consecutive lines match
+        let mut consecutive_match_count = 0;
+        let max_possible_matches = std::cmp::min(
+          file_lines.len() - start_idx,
+          other_file_lines.len() - other_start_idx,
+        );
+
+        for offset in 0..max_possible_matches {
+          if file_lines[start_idx + offset]
+            == other_file_lines[other_start_idx + offset]
+          {
+            consecutive_match_count += 1;
+          } else {
+            break;
+          }
+        }
+
+        // Only consider matches of at least 2 lines
+        if consecutive_match_count >= 2 {
+          // Combine the matching lines into a single text block
+          let block = file_lines
+            [start_idx..(start_idx + consecutive_match_count)]
+            .join("\n");
+
+          // Create an entry for this multi-line match
+          let mut found = false;
+          for (existing_block, locations) in &mut multi_line_dups {
+            if *existing_block == block {
+              // This exact block already exists, just add the locations
+              if !locations
+                .contains(&(file_entry.name.clone(), start_idx as u32 + 1))
+              {
+                locations.push((file_entry.name.clone(), start_idx as u32 + 1));
+              }
+              if !locations.contains(&(other_file.clone(), *other_line_num)) {
+                locations.push((other_file.clone(), *other_line_num));
+              }
+              found = true;
+              break;
+            }
+          }
+
+          if !found {
+            // New duplication block
+            multi_line_dups.push((
+              block,
+              vec![
+                (file_entry.name.clone(), start_idx as u32 + 1),
+                (other_file.clone(), *other_line_num),
+              ],
+            ));
+          }
+        }
+      }
+    }
+  }
+
+  // Sort duplications by: 1) number of lines, 2) total character length
+  multi_line_dups.sort_by(|a, b| {
+    // First compare by line count (number of newlines + 1)
+    let a_lines = a.0.matches('\n').count() + 1;
+    let b_lines = b.0.matches('\n').count() + 1;
+
+    let line_cmp = b_lines.cmp(&a_lines);
+
+    if line_cmp == std::cmp::Ordering::Equal {
+      // If line count is the same, sort by content length
+      b.0.len().cmp(&a.0.len())
+    } else {
+      line_cmp
+    }
+  });
+
+  multi_line_dups
+}
+
 #[test]
 fn test_find_duplicate_lines() {
   let file1 = FileEntry {
@@ -229,6 +370,67 @@ fn test_find_duplicate_lines() {
   )];
 
   assert_eq!(duplications, expected_duplications);
+}
+
+#[test]
+fn test_find_multi_line_duplications() {
+  let file1 = FileEntry {
+    name: "file1.txt".to_string(),
+    content: "\
+            This is a test.\n\
+            This is a second line.\n\
+            This is a third line.\n\
+            Some other content.\n\
+            And another line here.\n\
+            This is a test.\n\
+            This is a second line.\n\
+            A different third line.\n"
+      .to_string(),
+  };
+  let file2 = FileEntry {
+    name: "file2.txt".to_string(),
+    content: "\
+            Something unrelated.\n\
+            This is a test.\n\
+            This is a second line.\n\
+            This is a third line.\n\
+            Final line.\n"
+      .to_string(),
+  };
+
+  let files = vec![file1, file2];
+  let duplications = find_multi_line_duplications(files);
+
+  // The test should have at least 2 duplication entries
+  assert!(duplications.len() >= 2);
+
+  // Look for the 3-line duplication
+  let three_line_dup =
+    "This is a test.\nThis is a second line.\nThis is a third line.";
+  let mut found_three_line = false;
+
+  // Look for the 2-line duplication
+  let two_line_dup = "This is a test.\nThis is a second line.";
+  let mut found_two_line = false;
+
+  for (block, locations) in &duplications {
+    if block == three_line_dup {
+      found_three_line = true;
+      assert_eq!(locations.len(), 2);
+      assert!(locations.contains(&("file1.txt".to_string(), 1)));
+      assert!(locations.contains(&("file2.txt".to_string(), 2)));
+    } else if block == two_line_dup {
+      found_two_line = true;
+      assert_eq!(locations.len(), 3);
+      assert!(locations.contains(&("file1.txt".to_string(), 1)));
+      assert!(locations.contains(&("file1.txt".to_string(), 6)));
+      assert!(locations.contains(&("file2.txt".to_string(), 2)));
+    }
+  }
+
+  // Make sure we found both duplications
+  assert!(found_three_line, "Did not find 3-line duplication");
+  assert!(found_two_line, "Did not find 2-line duplication");
 }
 
 /// Run Textalyzer with the given configuration.
@@ -433,7 +635,7 @@ pub fn run<A: Write>(
           name: path.to_string_lossy().into_owned(),
           content: fs::read_to_string(path)?,
         };
-        let duplications = find_duplicate_lines(vec![file_entry]);
+        let duplications = find_multi_line_duplications(vec![file_entry]);
         output_duplications(duplications, output_stream)
       } else if path.is_dir() {
         // Handle directory traversal
@@ -451,7 +653,7 @@ pub fn run<A: Write>(
         )?;
 
         let file_entries = load_files(files)?;
-        let duplications = find_duplicate_lines(file_entries);
+        let duplications = find_multi_line_duplications(file_entries);
 
         output_duplications(duplications, output_stream)
       } else {

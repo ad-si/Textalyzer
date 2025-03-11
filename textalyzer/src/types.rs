@@ -17,7 +17,7 @@ pub struct Config {
   pub command: Command,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileEntry {
   pub name: String,
   pub content: String,

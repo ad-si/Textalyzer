@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
 use textalyzer::{
-  find_duplicate_lines,
+  find_multi_line_duplications,
   format_freq_map,
   generate_frequency_map,
   types::FileEntry,
@@ -20,6 +20,6 @@ pub fn get_dup_lines(text: String) -> String {
     name: "textarea".to_string(),
     content: text,
   };
-  let duplications = find_duplicate_lines(vec![temp_file]);
+  let duplications = find_multi_line_duplications(vec![temp_file]);
   serde_json::to_string(&duplications).unwrap()
 }
