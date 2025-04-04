@@ -1,6 +1,7 @@
 pub mod duplication;
 pub mod file_utils;
 pub mod frequency;
+pub mod line_length;
 pub mod output;
 pub mod types;
 
@@ -21,6 +22,7 @@ use std::path::Path;
 use duplication::{find_duplicate_lines, find_multi_line_duplications};
 use file_utils::{find_all_files, load_files};
 use frequency::{format_freq_map, generate_frequency_map};
+use line_length::process_and_output_line_length;
 use output::output_duplications;
 use types::{Command, Config};
 
@@ -114,6 +116,61 @@ pub fn run<A: Write>(
       };
 
       output_duplications(duplications, output_stream, files_only)
+    }
+    Command::LineLength { paths } => {
+      // Collect all file entries from all specified paths
+      let mut all_files = Vec::new();
+      let mut scanned_dirs = 0;
+      let mut scanned_files = 0;
+
+      // Process each path argument
+      for path_str in paths {
+        let path = Path::new(&path_str);
+
+        if path.is_file() {
+          // Single file
+          all_files.push(path.to_path_buf());
+          scanned_files += 1;
+        } else if path.is_dir() {
+          // Directory traversal
+          let files = find_all_files(path)?;
+          writeln!(
+            &mut output_stream,
+            "{}",
+            format!(
+              "🔎 Scanning {} files in directory: {}",
+              files.len(),
+              path.display()
+            )
+            .bold()
+          )?;
+
+          all_files.extend(files);
+          scanned_dirs += 1;
+        } else {
+          return Err(
+            format!("Path does not exist: {}", path.display()).into(),
+          );
+        }
+      }
+
+      if scanned_dirs == 0 && scanned_files > 0 {
+        writeln!(
+          &mut output_stream,
+          "{}",
+          format!("🔎 Scanning {} file(s)", all_files.len()).bold()
+        )?;
+      }
+
+      if all_files.is_empty() {
+        return Err("No valid files found in the specified paths".into());
+      }
+
+      // Load all collected files
+      let file_entries = load_files(all_files)?;
+
+      // Process and output the line length histogram
+      process_and_output_line_length(file_entries, output_stream)
     }
   }
 }

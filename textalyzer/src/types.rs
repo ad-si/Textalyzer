@@ -18,6 +18,11 @@ pub enum Command {
     #[clap(long)]
     files_only: bool,
   },
+  /// Analyzes and prints a histogram of line lengths in source files
+  LineLength {
+    /// Paths to files or directories to scan
+    paths: Vec<String>,
+  },
 }
 
 pub struct Config {
