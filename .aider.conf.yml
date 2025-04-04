@@ -1,0 +1,22 @@
+model: gemini/gemini-2.5-pro-exp-03-25
+
+auto-test: true
+test-cmd: cargo test
+
+# auto-lint: true
+# lint-cmd: cargo fmt
+
+auto-commits: false
+attribute-committer: false
+
+file:
+  - textalyzer/src/duplication.rs
+  - textalyzer/src/file_utils.rs
+  - textalyzer/src/frequency.rs
+  - textalyzer/src/lib.rs
+  - textalyzer/src/main.rs
+  - textalyzer/src/output.rs
+  - textalyzer/src/types.rs
+
+read:
+  - textalyzer/tests/integration_tests.rs
