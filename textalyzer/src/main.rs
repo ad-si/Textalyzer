@@ -12,9 +12,6 @@ use textalyzer::types::{Command, Config};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-  /// Optional name to operate on
-  name: Option<String>,
-
   #[command(subcommand)]
   command: Option<Command>,
 }

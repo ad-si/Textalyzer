@@ -12,7 +12,7 @@ pub fn is_light_theme() -> bool {
   if let Ok(color_theme) = std::env::var("COLORFGBG") {
     // COLORFGBG is set by some terminals with foreground/background colors
     // If background color (last value) is high, it's likely a light theme
-    if let Some(bg) = color_theme.split(';').last() {
+    if let Some(bg) = color_theme.split(';').next_back() {
       if let Ok(bg_val) = bg.parse::<u8>() {
         return bg_val > 10; // Higher values usually indicate bright backgrounds
       }

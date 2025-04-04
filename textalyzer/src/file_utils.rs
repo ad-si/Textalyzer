@@ -65,7 +65,6 @@ pub fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
 
   // Configure the walker to respect standard ignore files
   builder
-    .hidden(false) // Don't skip hidden files (let .gitignore decide)
     .git_global(true) // Use global gitignore
     .git_ignore(true) // Use git ignore
     .ignore(true) // Use .ignore files
@@ -132,7 +131,7 @@ pub fn load_files(
         match unsafe { MmapOptions::new().map(&file) } {
           Ok(mmap) => {
             // Check if this looks like a binary file (contains null bytes)
-            if mmap.iter().any(|&b| b == 0) {
+            if mmap.contains(&0) {
               return Err("Binary file detected".into());
             }
 
