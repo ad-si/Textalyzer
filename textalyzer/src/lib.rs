@@ -101,7 +101,7 @@ pub fn run<A: Write>(
         // For min_lines > 1, use the multi-line detection with filtering
         let mut results = find_multi_line_duplications(file_entries);
 
-        // Filter results to only include those with at least min_lines non-empty lines
+        // Only include those with at least min_lines non-empty lines
         results.retain(|(content, _)| {
           let non_empty_lines = content
             .split('\n')

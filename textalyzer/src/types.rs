@@ -7,11 +7,11 @@ use self::clap::Subcommand;
 pub enum Command {
   /// Prints a histogram of word frequency in a file
   Histogram { filepath: String },
-  /// Prints sections that might be duplicated in files or directories (recursive)
+  /// Prints duplicated sections in all files at the given paths
   Duplication {
     /// Paths to files or directories to scan for duplicates
     paths: Vec<String>,
-    /// Minimum number of non-empty lines required to consider a block as a duplication
+    /// Minimum number of non-empty lines to be considered a duplication
     #[clap(long, default_value = "3")]
     min_lines: usize,
     /// Only show the file paths with duplications, not the duplicated content

@@ -6,7 +6,7 @@ use terminal_size::{terminal_size, Width};
 /// Attempt to detect if terminal is using a light theme
 pub fn is_light_theme() -> bool {
   // Try to detect light theme by checking environment variables
-  // This is an approximate detection, as there's no standard way to detect themes
+  // This is an approximation, as there's no standard way to detect themes
 
   // Check for common environment variables that might indicate theme
   if let Ok(color_theme) = std::env::var("COLORFGBG") {
@@ -14,7 +14,7 @@ pub fn is_light_theme() -> bool {
     // If background color (last value) is high, it's likely a light theme
     if let Some(bg) = color_theme.split(';').last() {
       if let Ok(bg_val) = bg.parse::<u8>() {
-        return bg_val > 10; // Higher values usually indicate lighter backgrounds
+        return bg_val > 10; // Higher values usually indicate bright backgrounds
       }
     }
   }
@@ -72,7 +72,7 @@ pub fn output_duplications<A: Write>(
       // Format each location as a colored item
       let file_path = loc.0.clone();
       let line_num = loc.1;
-      let _is_last_location = i == total_locations - 1; // For potential future use
+      let _is_last_location = i == total_locations - 1; // For future use
 
       // Adjust colors based on detected theme
       let loc_str = if is_light {

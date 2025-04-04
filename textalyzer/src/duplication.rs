@@ -234,7 +234,7 @@ pub fn find_multi_line_duplications(
   let mut all_blocks: Vec<(String, Vec<(String, u32)>)> = raw_blocks_map
     .into_iter()
     .filter(|(content, _)| {
-      // Keep any block with at least one duplicate and at least one non-empty line
+      // Keep any block with at least one duplicate and one non-empty line
       // Final filtering by min_lines will happen in lib.rs
       content
         .split('\n')

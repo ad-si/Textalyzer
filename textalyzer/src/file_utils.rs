@@ -97,7 +97,8 @@ pub fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
   Ok(files)
 }
 
-/// Load multiple files as FileEntry structs using memory mapping for improved performance
+/// Load multiple files as FileEntry structs
+/// using memory mapping for improved performance
 pub fn load_files(
   paths: Vec<PathBuf>,
 ) -> Result<Vec<FileEntry>, Box<dyn Error>> {
@@ -150,7 +151,7 @@ pub fn load_files(
         }
       })();
 
-      // If memory mapping fails, fall back to regular string loading for very small files
+      // If memory mapping fails, use regular string loading for small files
       match result {
         Ok(entry) => Some(entry),
         Err(_) => {
@@ -244,7 +245,7 @@ mod tests {
 
     assert_eq!(files.len(), 2);
 
-    // Check that we found all the files (using contains instead of equality due to platform differences)
+    // Check that we found all the files
     assert!(files.iter().any(|p| p.ends_with("file1.txt")));
     assert!(files.iter().any(|p| p.ends_with("file2.txt")));
 
