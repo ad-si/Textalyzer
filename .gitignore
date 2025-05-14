@@ -1,3 +1,4 @@
+/.aider*
+/.direnv
+/**/*.rs.bk
 /target
-**/*.rs.bk
-.aider*
