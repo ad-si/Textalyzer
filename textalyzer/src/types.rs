@@ -2,11 +2,17 @@ extern crate clap;
 extern crate memmap2;
 
 use self::clap::Subcommand;
+use serde::Serialize;
 
 #[derive(Subcommand)]
 pub enum Command {
   /// Prints a histogram of word frequency in a file
-  Histogram { filepath: String },
+  Histogram {
+    filepath: String,
+    /// Output the histogram data as JSON
+    #[clap(long)]
+    json: bool,
+  },
   /// Prints duplicated sections in all files at the given paths
   Duplication {
     /// Paths to files or directories to scan for duplicates
@@ -22,6 +28,9 @@ pub enum Command {
   LineLength {
     /// Paths to files or directories to scan
     paths: Vec<String>,
+    /// Output the histogram data as JSON
+    #[clap(long)]
+    json: bool,
   },
 }
 
@@ -90,4 +99,18 @@ pub struct LineEntry {
   pub file_name: String,
   pub line_number: u32,
   pub content: String,
+}
+
+// Helper type for JSON serialization of frequency maps
+#[derive(Serialize)]
+pub struct FrequencyItem {
+  pub word: String,
+  pub count: i32,
+}
+
+// Helper type for JSON serialization of line length histograms
+#[derive(Serialize)]
+pub struct LineLengthItem {
+  pub length: usize,
+  pub count: usize,
 }

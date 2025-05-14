@@ -1,5 +1,7 @@
+use crate::types::LineLengthItem;
 use crate::types::{FileEntry, MappedContent};
 use pad::{Alignment, PadStr};
+use serde_json;
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Write;
@@ -88,14 +90,29 @@ fn format_line_length_histogram(histogram: HashMap<usize, usize>) -> String {
   result
 }
 
-/// Processes files to calculate and print the line length histogram
+/// Processes files to calculate and print the line length histogram, optionally as JSON
 pub fn process_and_output_line_length<A: Write>(
   files: Vec<FileEntry>,
   mut output_stream: A,
+  json_output: bool,
 ) -> Result<(), Box<dyn Error>> {
   let histogram = calculate_line_length_histogram(&files);
-  let formatted_histogram = format_line_length_histogram(histogram);
-  writeln!(output_stream, "{}", formatted_histogram)?;
+
+  if json_output {
+    // Convert HashMap to Vec<LineLengthItem> for stable JSON output
+    let mut histogram_vec: Vec<LineLengthItem> = histogram
+      .into_iter()
+      .map(|(length, count)| LineLengthItem { length, count })
+      .collect();
+    // Sort by length for stability
+    histogram_vec.sort_by_key(|item| item.length);
+    let json_string = serde_json::to_string_pretty(&histogram_vec)?;
+    writeln!(output_stream, "{}", json_string)?;
+  } else {
+    let formatted_histogram = format_line_length_histogram(histogram);
+    writeln!(output_stream, "{}", formatted_histogram)?;
+  }
+
   Ok(())
 }
 

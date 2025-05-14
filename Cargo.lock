@@ -489,6 +489,8 @@ dependencies = [
  "memmap2",
  "pad",
  "rayon",
+ "serde",
+ "serde_json",
  "tempfile",
  "terminal_size",
  "unicode-width 0.2.0",

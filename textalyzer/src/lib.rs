@@ -24,19 +24,33 @@ use file_utils::{find_all_files, load_files};
 use frequency::{format_freq_map, generate_frequency_map};
 use line_length::process_and_output_line_length;
 use output::output_duplications;
-use types::{Command, Config};
+use types::{Command, Config, FrequencyItem};
 
 pub fn run<A: Write>(
   config: Config,
   mut output_stream: A,
 ) -> Result<(), Box<dyn Error>> {
   match config.command {
-    Command::Histogram { filepath } => {
+    Command::Histogram { filepath, json } => {
       let file_content = fs::read_to_string(filepath)?;
       let freq_map = generate_frequency_map(&file_content);
-      let formatted = format_freq_map(freq_map);
-      // Use instead writeln! of println! to avoid "broken pipe" errors
-      writeln!(&mut output_stream, "{}", formatted)?;
+
+      if json {
+        // Convert HashMap to Vec<FrequencyItem> for stable JSON output
+        let mut freq_vec: Vec<FrequencyItem> = freq_map
+          .into_iter()
+          .map(|(word, count)| FrequencyItem { word, count })
+          .collect();
+        // Sort by count descending, then alphabetically for stability
+        freq_vec
+          .sort_by(|a, b| b.count.cmp(&a.count).then(a.word.cmp(&b.word)));
+        let json_output = serde_json::to_string_pretty(&freq_vec)?;
+        writeln!(&mut output_stream, "{}", json_output)?;
+      } else {
+        let formatted = format_freq_map(freq_map);
+        // Use instead writeln! of println! to avoid "broken pipe" errors
+        writeln!(&mut output_stream, "{}", formatted)?;
+      }
       Ok(())
     }
     Command::Duplication {
@@ -117,7 +131,7 @@ pub fn run<A: Write>(
 
       output_duplications(duplications, output_stream, files_only)
     }
-    Command::LineLength { paths } => {
+    Command::LineLength { paths, json } => {
       // Collect all file entries from all specified paths
       let mut all_files = Vec::new();
       let mut scanned_dirs = 0;
@@ -170,7 +184,7 @@ pub fn run<A: Write>(
       let file_entries = load_files(all_files)?;
 
       // Process and output the line length histogram
-      process_and_output_line_length(file_entries, output_stream)
+      process_and_output_line_length(file_entries, output_stream, json)
     }
   }
 }
