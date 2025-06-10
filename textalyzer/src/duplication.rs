@@ -64,13 +64,12 @@ pub fn find_multi_line_duplications(
     .iter()
     .map(|f| {
       // Get the lines from either mapped or string content
-      let lines = match &f.content {
+      let lines: Vec<String> = match &f.content {
         MappedContent::Mapped(mmap) => {
-          // Convert memory map to string slice
           if let Ok(content) = std::str::from_utf8(mmap) {
             content.lines().map(String::from).collect()
           } else {
-            Vec::new() // Skip invalid UTF-8
+            Vec::new()
           }
         }
         MappedContent::String(content) => {
@@ -92,9 +91,12 @@ pub fn find_multi_line_duplications(
 
       // Process each line in the file and store entries in a local collection
       for (i, line) in file_lines.iter().enumerate() {
-        if !line.trim().is_empty() {
-          local_entries
-            .push((line.clone(), (file_entry.name.clone(), (i + 1) as u32)));
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+          local_entries.push((
+            trimmed.to_string(),                   // key used for matching
+            (file_entry.name.clone(), (i + 1) as u32),
+          ));
         }
       }
 
@@ -173,8 +175,8 @@ pub fn find_multi_line_duplications(
                 for offset in 0..max_len {
                   if start_idx + offset < file_lines.len()
                     && other_start_idx + offset < other_file_lines.len()
-                    && file_lines[start_idx + offset]
-                      == other_file_lines[other_start_idx + offset]
+                    && file_lines[start_idx + offset].trim()
+                      == other_file_lines[other_start_idx + offset].trim()
                   {
                     match_len += 1;
                   } else {
@@ -184,9 +186,35 @@ pub fn find_multi_line_duplications(
 
                 // Only process matches of at least 1 line
                 if match_len >= 1 {
-                  // Efficiently build the block string
-                  let block =
-                    file_lines[start_idx..(start_idx + match_len)].join("\n");
+                  // Slice with the original (indented) lines that form this block
+                  let block_lines = &file_lines[start_idx..start_idx + match_len];
+
+                  // Determine the minimum leading-whitespace width
+                  let min_indent = block_lines
+                      .iter()
+                      .filter_map(|l| {
+                          let trimmed = l.trim_start();
+                          if trimmed.is_empty() {
+                              None
+                          } else {
+                              Some(l.len() - trimmed.len())   // number of leading white-space bytes
+                          }
+                      })
+                      .min()
+                      .unwrap_or(0);
+
+                  // Re-build block with that common indent removed
+                  let block = block_lines
+                      .iter()
+                      .map(|l| {
+                          if l.len() >= min_indent {
+                              l[min_indent..].to_string()
+                          } else {
+                              l.clone()
+                          }
+                      })
+                      .collect::<Vec<String>>()
+                      .join("\n");
 
                   // Use our local hash map for faster lookups
                   let locations = local_blocks.entry(block).or_default();
@@ -523,5 +551,33 @@ mod tests {
 
     // Verify that we found all duplicated blocks
     assert_eq!(duplications.len(), DUPLICATED_BLOCKS);
+  }
+
+  #[test]
+  fn test_duplication_ignores_indentation() {
+    let file1 = FileEntry {
+      name: "file1.txt".into(),
+      content: MappedContent::String(
+        "    fn main() {\n        println!(\"Hello\");\n    }\n".into(),
+      ),
+    };
+    let file2 = FileEntry {
+      name: "file2.txt".into(),
+      content: MappedContent::String(
+        "fn main() {\nprintln!(\"Hello\");\n}\n".into(),
+      ),
+    };
+
+    // Detect duplicates (multi-line)
+    let dups = find_multi_line_duplications(vec![file1, file2]);
+
+    // Expect exactly one 3-line duplication independent of indentation
+    assert_eq!(dups.len(), 1);
+    let (block, locs) = &dups[0];
+    assert_eq!(
+      block, "fn main() {\nprintln!(\"Hello\");\n}",
+      "Block should be compared without leading spaces"
+    );
+    assert_eq!(locs.len(), 2, "Both files should be reported");
   }
 }

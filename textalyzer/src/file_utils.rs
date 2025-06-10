@@ -28,7 +28,7 @@ pub fn merge_file_lines(
               .map(move |(num, line)| LineEntry {
                 file_name: file.name.clone(),
                 line_number: (num as u32 + 1),
-                content: line.to_string(),
+                content: line.trim().to_string(),
               })
               .collect::<Vec<_>>()
           } else {
@@ -45,7 +45,7 @@ pub fn merge_file_lines(
             .map(move |(num, line)| LineEntry {
               file_name: file.name.clone(),
               line_number: (num as u32 + 1),
-              content: line.to_string(),
+              content: line.trim().to_string(),
             })
             .collect::<Vec<_>>()
         }
