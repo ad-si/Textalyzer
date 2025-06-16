@@ -1,4 +1,7 @@
-model: gemini/gemini-2.5-pro-exp-03-25
+model: o3
+architect: true
+
+# model: gemini/gemini-2.5-pro-preview-06-05
 
 auto-test: true
 test-cmd: cargo test
@@ -10,10 +13,13 @@ auto-commits: false
 attribute-committer: false
 
 file:
+  - Cargo.toml
+  - textalyzer-wasm/src/lib.rs
   - textalyzer/src/duplication.rs
   - textalyzer/src/file_utils.rs
   - textalyzer/src/frequency.rs
   - textalyzer/src/lib.rs
+  - textalyzer/src/line_length.rs
   - textalyzer/src/main.rs
   - textalyzer/src/output.rs
   - textalyzer/src/types.rs
