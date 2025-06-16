@@ -1,6 +1,14 @@
 # Changelog
 
-# 2025-03-11 - v0.3.0
+## 2025-06-16 - v0.4.0
+
+- Add new subcommand `line-length` to generate a histogram of line lengths
+- Ignore leading and trailing whitespace when checking line duplication
+- Use `flake.nix` for dependency management
+- Automatically deploy latest version to GitHub Pages
+
+
+## 2025-03-11 - v0.3.0
 
 - Add support for compiling to WASM and include a webapp build
     to analyze text in the browser.
