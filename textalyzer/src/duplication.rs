@@ -94,7 +94,7 @@ pub fn find_multi_line_duplications(
         let trimmed = line.trim();
         if !trimmed.is_empty() {
           local_entries.push((
-            trimmed.to_string(),                   // key used for matching
+            trimmed.to_string(), // key used for matching
             (file_entry.name.clone(), (i + 1) as u32),
           ));
         }
@@ -187,34 +187,35 @@ pub fn find_multi_line_duplications(
                 // Only process matches of at least 1 line
                 if match_len >= 1 {
                   // Slice with the original (indented) lines that form this block
-                  let block_lines = &file_lines[start_idx..start_idx + match_len];
+                  let block_lines =
+                    &file_lines[start_idx..start_idx + match_len];
 
                   // Determine the minimum leading-whitespace width
                   let min_indent = block_lines
-                      .iter()
-                      .filter_map(|l| {
-                          let trimmed = l.trim_start();
-                          if trimmed.is_empty() {
-                              None
-                          } else {
-                              Some(l.len() - trimmed.len())   // number of leading white-space bytes
-                          }
-                      })
-                      .min()
-                      .unwrap_or(0);
+                    .iter()
+                    .filter_map(|l| {
+                      let trimmed = l.trim_start();
+                      if trimmed.is_empty() {
+                        None
+                      } else {
+                        Some(l.len() - trimmed.len()) // number of leading white-space bytes
+                      }
+                    })
+                    .min()
+                    .unwrap_or(0);
 
                   // Re-build block with that common indent removed
                   let block = block_lines
-                      .iter()
-                      .map(|l| {
-                          if l.len() >= min_indent {
-                              l[min_indent..].to_string()
-                          } else {
-                              l.clone()
-                          }
-                      })
-                      .collect::<Vec<String>>()
-                      .join("\n");
+                    .iter()
+                    .map(|l| {
+                      if l.len() >= min_indent {
+                        l[min_indent..].to_string()
+                      } else {
+                        l.clone()
+                      }
+                    })
+                    .collect::<Vec<String>>()
+                    .join("\n");
 
                   // Use our local hash map for faster lookups
                   let locations = local_blocks.entry(block).or_default();

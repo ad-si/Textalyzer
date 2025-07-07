@@ -21,7 +21,7 @@ fn main() {
 
   if let Some(command) = cli.command {
     if let Err(error) = run(Config { command }, io::stdout()) {
-      eprintln!("ERROR:\n{}", error);
+      eprintln!("ERROR:\n{error}");
       process::exit(1);
     }
   }

@@ -25,6 +25,7 @@ use frequency::{format_freq_map, generate_frequency_map};
 use line_length::process_and_output_line_length;
 use output::output_duplications;
 use types::{Command, Config, FrequencyItem};
+use types::{DuplicationItem, DuplicationLocation};
 
 pub fn run<A: Write>(
   config: Config,
@@ -45,11 +46,11 @@ pub fn run<A: Write>(
         freq_vec
           .sort_by(|a, b| b.count.cmp(&a.count).then(a.word.cmp(&b.word)));
         let json_output = serde_json::to_string_pretty(&freq_vec)?;
-        writeln!(&mut output_stream, "{}", json_output)?;
+        writeln!(&mut output_stream, "{json_output}")?;
       } else {
         let formatted = format_freq_map(freq_map);
         // Use instead writeln! of println! to avoid "broken pipe" errors
-        writeln!(&mut output_stream, "{}", formatted)?;
+        writeln!(&mut output_stream, "{formatted}")?;
       }
       Ok(())
     }
@@ -57,6 +58,7 @@ pub fn run<A: Write>(
       paths,
       min_lines,
       files_only,
+      json,
     } => {
       // Collect all file entries from all specified paths
       let mut all_files = Vec::new();
@@ -129,7 +131,23 @@ pub fn run<A: Write>(
         results
       };
 
-      output_duplications(duplications, output_stream, files_only)
+      if json {
+        let semantic: Vec<DuplicationItem> = duplications
+          .into_iter()
+          .map(|(content, locs)| DuplicationItem {
+            content,
+            locations: locs
+              .into_iter()
+              .map(|(path, line)| DuplicationLocation { path, line })
+              .collect(),
+          })
+          .collect();
+        let json_output = serde_json::to_string_pretty(&semantic)?;
+        writeln!(&mut output_stream, "{json_output}")?;
+        Ok(())
+      } else {
+        output_duplications(duplications, output_stream, files_only)
+      }
     }
     Command::LineLength { paths, json } => {
       // Collect all file entries from all specified paths

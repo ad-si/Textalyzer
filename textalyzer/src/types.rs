@@ -23,6 +23,9 @@ pub enum Command {
     /// Only show the file paths with duplications, not the duplicated content
     #[clap(long)]
     files_only: bool,
+    /// Output the duplication data as JSON
+    #[clap(long)]
+    json: bool,
   },
   /// Analyzes and prints a histogram of line lengths in source files
   LineLength {
@@ -113,4 +116,22 @@ pub struct FrequencyItem {
 pub struct LineLengthItem {
   pub length: usize,
   pub count: usize,
+}
+
+/// JSON-friendly location for a duplication occurrence
+#[derive(Serialize)]
+pub struct DuplicationLocation {
+  /// Path to the file containing the duplication
+  pub path: String,
+  /// Line number where the duplication occurs
+  pub line: u32,
+}
+
+/// JSON-friendly representation of a duplicated block
+#[derive(Serialize)]
+pub struct DuplicationItem {
+  /// The duplicated content block
+  pub content: String,
+  /// All file locations where this block appears
+  pub locations: Vec<DuplicationLocation>,
 }

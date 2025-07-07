@@ -1,7 +1,7 @@
-model: o3
+model: openai/o3
 architect: true
 
-# model: gemini/gemini-2.5-pro-preview-06-05
+# model: gemini/gemini-2.5-pro
 
 auto-test: true
 test-cmd: cargo test

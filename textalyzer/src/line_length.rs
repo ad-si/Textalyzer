@@ -107,10 +107,10 @@ pub fn process_and_output_line_length<A: Write>(
     // Sort by length for stability
     histogram_vec.sort_by_key(|item| item.length);
     let json_string = serde_json::to_string_pretty(&histogram_vec)?;
-    writeln!(output_stream, "{}", json_string)?;
+    writeln!(output_stream, "{json_string}")?;
   } else {
     let formatted_histogram = format_line_length_histogram(histogram);
-    writeln!(output_stream, "{}", formatted_histogram)?;
+    writeln!(output_stream, "{formatted_histogram}")?;
   }
 
   Ok(())

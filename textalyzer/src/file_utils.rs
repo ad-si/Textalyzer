@@ -88,7 +88,7 @@ pub fn find_all_files(dir: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
       }
       Err(err) => {
         // Log error but continue with other files
-        eprintln!("Error accessing path: {}", err);
+        eprintln!("Error accessing path: {err}");
       }
     }
   }

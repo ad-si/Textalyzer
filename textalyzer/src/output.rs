@@ -21,7 +21,7 @@ pub fn is_light_theme() -> bool {
 
   // Check for specific terminal settings
   if let Ok(term_program) = std::env::var("TERM_PROGRAM") {
-    if let Ok(theme) = std::env::var(format!("{}_THEME", term_program)) {
+    if let Ok(theme) = std::env::var(format!("{term_program}_THEME")) {
       return theme.to_lowercase().contains("light");
     }
   }
@@ -93,19 +93,19 @@ pub fn output_duplications<A: Write>(
       if !current_line.is_empty()
         && current_line.len() + list_marker.len() + loc_str.len() > avail_width
       {
-        writeln!(&mut output_stream, "{}", current_line)?;
+        writeln!(&mut output_stream, "{current_line}")?;
 
         // Start a new line
-        write!(&mut output_stream, "{}", list_marker)?;
+        write!(&mut output_stream, "{list_marker}")?;
         current_line = loc_str.to_string();
       } else {
         // Add to current line
-        current_line = format!("{}{}{}", current_line, list_marker, loc_str);
+        current_line = format!("{current_line}{list_marker}{loc_str}");
       }
     }
 
     // Write the file paths
-    writeln!(&mut output_stream, "{}\n", current_line)?;
+    writeln!(&mut output_stream, "{current_line}\n")?;
 
     if !files_only {
       // Format the duplicate line with borders but no background color
@@ -117,12 +117,12 @@ pub fn output_duplications<A: Write>(
         line.normal()
       };
 
-      write!(&mut output_stream, "{:76}", formatted_line)?;
+      write!(&mut output_stream, "{formatted_line:76}")?;
       writeln!(&mut output_stream)?;
 
       // Add separator line of dashes after each duplication
       let separator = "-".repeat(term_width);
-      writeln!(&mut output_stream, "{}", separator)?;
+      writeln!(&mut output_stream, "{separator}")?;
     }
   }
 
