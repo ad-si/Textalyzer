@@ -1,5 +1,10 @@
 # Changelog
 
+## 2025-07-07 - v0.5.0
+
+- Add support for `--json` flag to `duplication` command
+
+
 ## 2025-06-16 - v0.4.0
 
 - Add new subcommand `line-length` to generate a histogram of line lengths
