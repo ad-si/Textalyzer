@@ -6,9 +6,10 @@ use serde::Serialize;
 
 #[derive(Subcommand)]
 pub enum Command {
-  /// Prints a histogram of word frequency in a file
+  /// Prints a histogram of word frequency in files
   Histogram {
-    filepath: String,
+    /// Paths to files or directories to scan
+    paths: Vec<String>,
     /// Output the histogram data as JSON
     #[clap(long)]
     json: bool,

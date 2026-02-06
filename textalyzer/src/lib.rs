@@ -15,7 +15,6 @@ extern crate unicode_width;
 
 use colored::Colorize;
 use std::error::Error;
-use std::fs;
 use std::io::Write;
 use std::path::Path;
 
@@ -32,13 +31,76 @@ pub fn run<A: Write>(
   mut output_stream: A,
 ) -> Result<(), Box<dyn Error>> {
   match config.command {
-    Command::Histogram { filepath, json } => {
-      let file_content = fs::read_to_string(filepath)?;
-      let freq_map = generate_frequency_map(&file_content);
+    Command::Histogram { paths, json } => {
+      // Collect all file entries from all specified paths
+      let mut all_files = Vec::new();
+      let mut scanned_dirs = 0;
+      let mut scanned_files = 0;
+
+      // Process each path argument
+      for path_str in paths {
+        let path = Path::new(&path_str);
+
+        if path.is_file() {
+          // Single file
+          all_files.push(path.to_path_buf());
+          scanned_files += 1;
+        } else if path.is_dir() {
+          // Directory traversal
+          let files = find_all_files(path)?;
+          if !json {
+            writeln!(
+              &mut output_stream,
+              "{}",
+              format!(
+                "🔎 Scanning {} files in directory: {}",
+                files.len(),
+                path.display()
+              )
+              .bold()
+            )?;
+          }
+
+          all_files.extend(files);
+          scanned_dirs += 1;
+        } else {
+          return Err(
+            format!("Path does not exist: {}", path.display()).into(),
+          );
+        }
+      }
+
+      if !json && scanned_dirs == 0 && scanned_files > 0 {
+        writeln!(
+          &mut output_stream,
+          "{}",
+          format!("🔎 Scanning {} file(s)", all_files.len()).bold()
+        )?;
+      }
+
+      if all_files.is_empty() {
+        return Err("No valid files found in the specified paths".into());
+      }
+
+      // Load all collected files
+      let file_entries = load_files(all_files)?;
+
+      // Generate frequency map by combining all files
+      use std::collections::HashMap;
+      let mut combined_freq_map = HashMap::new();
+
+      for file_entry in file_entries {
+        if let Some(content) = file_entry.content.as_str() {
+          let freq_map = generate_frequency_map(content);
+          for (word, count) in freq_map {
+            *combined_freq_map.entry(word).or_insert(0) += count;
+          }
+        }
+      }
 
       if json {
         // Convert HashMap to Vec<FrequencyItem> for stable JSON output
-        let mut freq_vec: Vec<FrequencyItem> = freq_map
+        let mut freq_vec: Vec<FrequencyItem> = combined_freq_map
           .into_iter()
           .map(|(word, count)| FrequencyItem { word, count })
           .collect();
@@ -48,7 +110,7 @@ pub fn run<A: Write>(
         let json_output = serde_json::to_string_pretty(&freq_vec)?;
         writeln!(&mut output_stream, "{json_output}")?;
       } else {
-        let formatted = format_freq_map(freq_map);
+        let formatted = format_freq_map(combined_freq_map);
         // Use instead writeln! of println! to avoid "broken pipe" errors
         writeln!(&mut output_stream, "{formatted}")?;
       }

@@ -15,7 +15,7 @@ CLI | Web
 
 ```sh
 # Word frequency histogram
-textalyzer histogram <filepath>
+textalyzer histogram <path> [<additional paths...>]
 
 # Find duplicated code blocks (default: minimum 3 non-empty lines)
 textalyzer duplication <path> [<additional paths...>]
