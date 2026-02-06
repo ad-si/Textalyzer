@@ -12,9 +12,9 @@ textalyzer-wasm/pkg: textalyzer-wasm/src/lib.rs textalyzer-wasm/Cargo.toml
 build: textalyzer-wasm/pkg
 
 
-.PHONY: fmt
-fmt:
-	nix fmt
+.PHONY: format
+format:
+	# nix fmt
 	cargo fmt
 
 
