@@ -31,7 +31,11 @@ pub fn run<A: Write>(
   mut output_stream: A,
 ) -> Result<(), Box<dyn Error>> {
   match config.command {
-    Command::Histogram { paths, json } => {
+    Command::Histogram {
+      paths,
+      json,
+      case_sensitive,
+    } => {
       // Collect all file entries from all specified paths
       let mut all_files = Vec::new();
       let mut scanned_dirs = 0;
@@ -91,7 +95,7 @@ pub fn run<A: Write>(
 
       for file_entry in file_entries {
         if let Some(content) = file_entry.content.as_str() {
-          let freq_map = generate_frequency_map(content);
+          let freq_map = generate_frequency_map(content, case_sensitive);
           for (word, count) in freq_map {
             *combined_freq_map.entry(word).or_insert(0) += count;
           }

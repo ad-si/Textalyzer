@@ -9,7 +9,7 @@ use textalyzer::{
 
 #[wasm_bindgen]
 pub fn get_freq_map(text: String) -> String {
-  let freq_map = generate_frequency_map(&text);
+  let freq_map = generate_frequency_map(&text, false);
   format_freq_map(freq_map)
 }
 

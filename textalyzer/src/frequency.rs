@@ -12,7 +12,8 @@ const MAX_LINE_LENGTH: u16 = 80;
 /// use textalyzer::frequency::generate_frequency_map;
 ///
 /// let freq_map = generate_frequency_map(
-///    "This test is a test to test the frequency map."
+///    "This test is a test to test the frequency map.",
+///    false
 /// );
 ///
 /// let expected_map: std::collections::HashMap<_, _> = vec![
@@ -31,14 +32,22 @@ const MAX_LINE_LENGTH: u16 = 80;
 ///
 /// assert_eq!(freq_map, expected_map);
 /// ```
-pub fn generate_frequency_map(text: &str) -> HashMap<String, i32> {
+pub fn generate_frequency_map(
+  text: &str,
+  case_sensitive: bool,
+) -> HashMap<String, i32> {
   let words = text
     .split(|character| !char::is_alphabetic(character))
     .filter(|word| word != &"");
   let mut frequency_map = HashMap::new();
 
   for word in words {
-    let count = frequency_map.entry(word.to_lowercase()).or_insert(0);
+    let key = if case_sensitive {
+      word.to_string()
+    } else {
+      word.to_lowercase()
+    };
+    let count = frequency_map.entry(key).or_insert(0);
     *count += 1;
   }
   frequency_map
@@ -97,7 +106,7 @@ mod tests {
   #[test]
   fn generate_frequency_map_from_text() {
     let text = "Hello World! A warm welcome to the world.";
-    let frequency_map = generate_frequency_map(&text);
+    let frequency_map = generate_frequency_map(&text, false);
     let expected_map = [
       (String::from("a"), 1),
       (String::from("hello"), 1),

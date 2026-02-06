@@ -13,6 +13,9 @@ pub enum Command {
     /// Output the histogram data as JSON
     #[clap(long)]
     json: bool,
+    /// Treat words as case-sensitive (default: case-insensitive)
+    #[clap(long)]
+    case_sensitive: bool,
   },
   /// Prints duplicated sections in all files at the given paths
   Duplication {

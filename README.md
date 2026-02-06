@@ -17,6 +17,9 @@ CLI | Web
 # Word frequency histogram
 textalyzer histogram <path> [<additional paths...>]
 
+# Word frequency histogram (case-sensitive)
+textalyzer histogram --case-sensitive <path> [<additional paths...>]
+
 # Find duplicated code blocks (default: minimum 3 non-empty lines)
 textalyzer duplication <path> [<additional paths...>]
 
