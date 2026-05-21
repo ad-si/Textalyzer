@@ -69,6 +69,7 @@ The duplication command analyzes files for duplicated text blocks. It can:
 - [pmd] - Source code analysis tool.
 - [qlty] - Code quality and security analysis tool.
 - [superdiff] - Find duplicate code blocks in files.
+- [TextDescriptives] - Python package for calculating a large variety of statistics from text.
 - [wf] - Command line utility for counting word frequency.
 
 [jscpd]: https://github.com/kucherenko/jscpd
@@ -76,6 +77,7 @@ The duplication command analyzes files for duplicated text blocks. It can:
 [pmd]: https://github.com/pmd/pmd
 [qlty]: https://github.com/qltysh/qlty
 [superdiff]: https://github.com/chuck-sys/superdiff
+[TextDescriptives]: https://github.com/HLasse/TextDescriptives
 [wf]: https://github.com/jarcane/wf
 
 
